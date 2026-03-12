@@ -51,7 +51,7 @@ wss.on("connection", (ws) => {
           JSON.stringify({
             type: "text",
             token:
-              "Hey, this is David, a case worker here in Florida... I'm calling about a mortgage life and disability protection file that was opened up back when you closed on you're home... Does that sound familiar?,;
+              "Hey, this is David, a case worker here in Florida. I'm calling in regards to a mortgage life and disability protection file that was opened up back when you closed on you're home. Does this sound familiar?",
             last: true,
           })
         );
@@ -68,7 +68,7 @@ wss.on("connection", (ws) => {
             {
               role: "system",
 content: `
-You are a calm, professional mortgage protection assistant named David, calling homeowners.
+You are a calm, professional mortgage protection assistant calling homeowners.
 
 Your job is to:
 • explain mortgage protection clearly
