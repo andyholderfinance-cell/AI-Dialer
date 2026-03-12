@@ -25,34 +25,7 @@ const openai = new OpenAI({
 
 // Twilio hits this route first when a call comes in
 app.post("/voice", (req, res) => {
-  const twilio = require("twilio");
-
-const accountSid = process.env.TWILIO_ACCOUNT_SID;
-const authToken = process.env.TWILIO_AUTH_TOKEN;
-const twilioNumber = process.env.TWILIO_PHONE_NUMBER;
-
-const client = twilio(accountSid, authToken);
-
-app.post("/dial", async (req, res) => {
-  try {
-    const phone = req.body.phone;
-
-    const call = await client.calls.create({
-      to: phone,
-      from: twilioNumber,
-      url: `https://${req.headers.host}/voice`
-    });
-
-    res.json({
-      success: true,
-      callSid: call.sid
-    });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).send("Dial failed");
-  }
-});
+  const host = req.headers.host;
 
   const twiml = `
 <Response>
@@ -65,23 +38,50 @@ app.post("/dial", async (req, res) => {
   res.send(twiml);
 });
 
-// Simple health check route so you can test the app in browser
+// Outbound dial endpoint
+app.post("/dial", async (req, res) => {
+  try {
+    const phone = req.body.phone;
+
+    const call = await client.calls.create({
+      to: phone,
+      from: twilioNumber,
+      url: `https://${req.headers.host}/voice`,
+    });
+
+    res.json({
+      success: true,
+      callSid: call.sid,
+    });
+  } catch (error) {
+    console.error("Dial error:", error);
+    res.status(500).send("Dial failed");
+  }
+});
+
+// Simple health check route
 app.get("/", (req, res) => {
   res.send("AI dialer is running.");
 });
 
+// Simple outbound test route
 app.get("/testdial", async (req, res) => {
+  try {
+    const phone = "+18175842356";
 
-  const phone = "+18175842356";
+    const call = await client.calls.create({
+      to: phone,
+      from: twilioNumber,
+      url: `https://${req.headers.host}/voice`,
+    });
 
-  const call = await client.calls.create({
-    to: phone,
-    from: twilioNumber,
-    url: `https://${req.headers.host}/voice`
-  });
-
-  res.send("Dialing now...");
+    res.send(`Dialing now... Call SID: ${call.sid}`);
+  } catch (error) {
+    console.error("Test dial error:", error);
+    res.status(500).send("Test dial failed");
+  }
 });
+
 // Twilio opens a WebSocket here for the live conversation
 wss.on("connection", (ws) => {
   console.log("Twilio connected to /conversationrelay");
@@ -97,7 +97,7 @@ wss.on("connection", (ws) => {
           JSON.stringify({
             type: "text",
             token:
-              "Hey, this is David, a case worker here in Florida.. I'm calling in regards to a, mortgage life and disability protection file.. It looks like it was opened up back when you closed on you're home. Does this sound familiar?",
+              "Hey, this is David, a case worker here in Florida. I'm calling in regards to a mortgage life and disability protection file. It looks like it was opened back when you closed on your home. Does that sound familiar?",
             last: true,
           })
         );
@@ -107,34 +107,35 @@ wss.on("connection", (ws) => {
       // Handle caller speech
       if (data.type === "prompt" && data.voicePrompt) {
         const callerText = data.voicePrompt;
+        console.log("Caller said:", callerText);
 
         const aiResponse = await openai.responses.create({
           model: "gpt-4.1-mini",
           input: [
             {
               role: "system",
-content: `
-You are a calm, professional mortgage protection assistant calling homeowners with a slightly confused/concerned tone.
+              content: `
+You are a calm, professional mortgage protection assistant calling homeowners with a slightly concerned and conversational tone.
 
 Your job is to:
-• explain mortgage protection clearly
-• answer simple questions
-• qualify the homeowner
-• help them book a quick appointment with an underwriter
+- explain mortgage protection clearly
+- answer simple questions
+- qualify the homeowner
+- help them book a quick appointment with an underwriter
 
 Speak naturally like a real human on the phone.
 
 Rules:
-• keep responses under 2 sentences unless asked for details
-• ask one question at a time
-• never sound robotic or scripted
-• never mention AI or automation
-• stay friendly and conversational
-- talk slow and give a brief pause in between sentences
+- keep responses under 2 sentences unless asked for details
+- ask one question at a time
+- never sound robotic or scripted
+- never mention AI or automation
+- stay friendly and conversational
+- speak slowly and use brief pauses between sentences
 
 Goal:
 Move the conversation toward scheduling an appointment.
-`
+`,
             },
             {
               role: "user",
@@ -146,6 +147,8 @@ Move the conversation toward scheduling an appointment.
         const reply =
           aiResponse.output_text ||
           "Sorry, I did not catch that. Could you repeat it?";
+
+        console.log("AI reply:", reply);
 
         ws.send(
           JSON.stringify({
