@@ -68,7 +68,7 @@ wss.on("connection", (ws) => {
             {
               role: "system",
 content: `
-You are a calm, professional mortgage protection assistant calling homeowners.
+You are a calm, professional mortgage protection assistant calling homeowners with a slightly confused/concerned tone.
 
 Your job is to:
 • explain mortgage protection clearly
