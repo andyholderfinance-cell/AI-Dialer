@@ -51,7 +51,7 @@ wss.on("connection", (ws) => {
           JSON.stringify({
             type: "text",
             token:
-              "Hey, this is David, a case worker here in Florida... I'm calling about a mortgage life and disability protection file that was opened up back when you closed on you're home... Does that sound familiar?,
+              "Hey, this is David, a case worker here in Florida... I'm calling about a mortgage life and disability protection file that was opened up back when you closed on you're home... Does that sound familiar?,;
             last: true,
           })
         );
