@@ -16,7 +16,7 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// 1) Twilio hits this route first when a call comes in
+// Twilio hits this route first when a call comes in
 app.post("/voice", (req, res) => {
   const host = req.headers.host;
 
@@ -31,12 +31,12 @@ app.post("/voice", (req, res) => {
   res.send(twiml);
 });
 
-// 2) Simple health check route so you can test the app in browser
+// Simple health check route so you can test the app in browser
 app.get("/", (req, res) => {
   res.send("AI dialer is running.");
 });
 
-// 3) Twilio opens a WebSocket here for the live conversation
+// Twilio opens a WebSocket here for the live conversation
 wss.on("connection", (ws) => {
   console.log("Twilio connected to /conversationrelay");
 
@@ -45,8 +45,20 @@ wss.on("connection", (ws) => {
       const data = JSON.parse(message.toString());
       console.log("Incoming Twilio event:", data);
 
-      // ConversationRelay sends different event types.
-      // We only care about the user's spoken text for now.
+      // Greeting when session starts
+      if (data.type === "setup") {
+        ws.send(
+          JSON.stringify({
+            type: "text",
+            token:
+              "Hello, this is the automated assistant for mortgage protection. How can I help you today?",
+            last: true,
+          })
+        );
+        return;
+      }
+
+      // Handle caller speech
       if (data.type === "prompt" && data.voicePrompt) {
         const callerText = data.voicePrompt;
 
@@ -56,37 +68,24 @@ wss.on("connection", (ws) => {
             {
               role: "system",
               content:
-                "You are a friendly, concise mortgage protection appointment setter. Speak naturally, keep responses short, ask one question at a time, and try to help the caller book an appointment."
+                "You are a friendly, concise mortgage protection appointment setter. Speak naturally, keep responses short, ask one question at a time, and try to help the caller book an appointment.",
             },
             {
               role: "user",
-              content: callerText
-            }
-          ]
+              content: callerText,
+            },
+          ],
         });
 
         const reply =
           aiResponse.output_text ||
           "Sorry, I did not catch that. Could you repeat it?";
 
-        // Send text back to Twilio so Twilio can speak it
         ws.send(
           JSON.stringify({
             type: "text",
             token: reply,
-            last: true
-          })
-        );
-      }
-
-      // Optional greeting when session starts
-      if (data.type === "setup") {
-        ws.send(
-          JSON.stringify({
-            type: "text",
-            token:
-              "Hello, this is the automated assistant for mortgage protection. How can I help you today?",
-            last: true
+            last: true,
           })
         );
       }
@@ -97,7 +96,7 @@ wss.on("connection", (ws) => {
         JSON.stringify({
           type: "text",
           token: "Sorry, something went wrong on my side.",
-          last: true
+          last: true,
         })
       );
     }
@@ -109,6 +108,7 @@ wss.on("connection", (ws) => {
 });
 
 const PORT = process.env.PORT || 3000;
+
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
