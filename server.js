@@ -18,7 +18,34 @@ const openai = new OpenAI({
 
 // Twilio hits this route first when a call comes in
 app.post("/voice", (req, res) => {
-  const host = req.headers.host;
+  const twilio = require("twilio");
+
+const accountSid = process.env.TWILIO_ACCOUNT_SID;
+const authToken = process.env.TWILIO_AUTH_TOKEN;
+const twilioNumber = process.env.TWILIO_PHONE_NUMBER;
+
+const client = twilio(accountSid, authToken);
+
+app.post("/dial", async (req, res) => {
+  try {
+    const phone = req.body.phone;
+
+    const call = await client.calls.create({
+      to: phone,
+      from: twilioNumber,
+      url: `https://${req.headers.host}/voice`
+    });
+
+    res.json({
+      success: true,
+      callSid: call.sid
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("Dial failed");
+  }
+});
 
   const twiml = `
 <Response>
