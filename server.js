@@ -29,8 +29,19 @@ const client = twilio(accountSid, authToken);
 app.post("/dial", async (req, res) => {
   try {
     const phone = req.body.phone;
+    
+app.get("/testdial", async (req, res) => {
 
-    const call = await client.calls.create({
+  const phone = "+1YOURNUMBER";
+
+  const call = await client.calls.create({
+    to: phone,
+    from: twilioNumber,
+    url: `https://${req.headers.host}/voice`
+  });
+
+  res.send("Dialing now...");
+});    const call = await client.calls.create({
       to: phone,
       from: twilioNumber,
       url: `https://${req.headers.host}/voice`
@@ -63,18 +74,6 @@ app.get("/", (req, res) => {
   res.send("AI dialer is running.");
 });
 
-app.get("/testdial", async (req, res) => {
-
-  const phone = "+18175842356";
-
-  const call = await client.calls.create({
-    to: phone,
-    from: twilioNumber,
-    url: `https://${req.headers.host}/voice`
-  });
-
-  res.send("Dialing now...");
-});
 // Twilio opens a WebSocket here for the live conversation
 wss.on("connection", (ws) => {
   console.log("Twilio connected to /conversationrelay");
