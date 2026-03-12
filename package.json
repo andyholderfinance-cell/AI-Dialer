@@ -1,0 +1,13 @@
+{
+  "name": "ai-dialer",
+  "version": "1.0.0",
+  "description": "AI dialer backend",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "twilio": "^4.20.0"
+  }
+}
