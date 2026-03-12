@@ -18,8 +18,7 @@ const openai = new OpenAI({
 
 // Twilio hits this route first when a call comes in
 app.post("/voice", (req, res) => {
-  const twilio = require("twilio");
-
+  const twilio =
 require("dotenv").config();
 
 const express = require("express");
