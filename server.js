@@ -12,8 +12,8 @@ const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const twilioNumber = process.env.TWILIO_PHONE_NUMBER;
 
-const CALLER_NAME = process.env.CALLER_NAME || "David";
-const UNDERWRITER_NAME = process.env.UNDERWRITER_NAME || "Andy Holder";
+const CALLER_NAME = process.env.CALLER_NAME || "Josh";
+const UNDERWRITER_NAME = process.env.UNDERWRITER_NAME || "Andy";
 const DEFAULT_STATE = process.env.DEFAULT_STATE || "Florida";
 const DEFAULT_TIMEZONE = process.env.CALENDLY_TIMEZONE || "America/New_York";
 
@@ -120,7 +120,7 @@ const SCRIPT_STEPS = [
     id: "underwriter_intro",
     type: "statement",
     resume_after_objection: true,
-    text: `${UNDERWRITER_NAME} is the underwriter for your county. He will be able to explain mortgage protection to you, as well as share his license with the state of {{state}}. He'll answer any questions you may have, pull up options tailored specifically to you, and help you apply for coverage.`,
+    text: `Okay, now ${UNDERWRITER_NAME} is the underwriter for your county. He will be able to explain mortgage protection to you, as well as share his license with the state of {{state}}. He'll answer any questions you may have, pull up options tailored specifically to you, and help you apply for coverage.`,
   },
   {
     id: "virtual_meeting",
