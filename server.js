@@ -869,14 +869,19 @@ app.post("/voice", (req, res) => {
   const twiml = `
 <Response>
   <Connect>
-    <ConversationRelay url="wss://${host}/conversationrelay?leadId=${leadId}" />
+    <ConversationRelay
+      url="wss://${host}/conversationrelay?leadId=${leadId}"
+      ttsProvider="ElevenLabs"
+      voice="s3TPKV1kjDlVtZbl4Ksh-flash_v2_5-0.85_0.75_0.80"
+      language="en-US"
+      ttsLanguage="en-US"
+    />
   </Connect>
 </Response>`;
 
   res.type("text/xml");
   res.send(twiml);
 });
-
 app.post("/dial", async (req, res) => {
   try {
     const host = req.headers.host;
