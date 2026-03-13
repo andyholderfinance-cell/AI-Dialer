@@ -367,17 +367,6 @@ function containsAny(text, phrases) {
   return phrases.some((phrase) => text.includes(normalizeText(phrase)));
 }
 
-function tokenize(text) {
-  return normalizeText(text)
-    .split(" ")
-    .filter(Boolean);
-}
-
-function hasWords(text, words) {
-  const tokens = new Set(tokenize(text));
-  return words.every((word) => tokens.has(word));
-}
-
 function normalizeText(text) {
   return safeString(text)
     .toLowerCase()
@@ -419,6 +408,57 @@ function detectGoodbye(text) {
   ];
 
   return goodbyes.some((g) => t.includes(g));
+}
+
+function detectPossibleUnknownObjection(text) {
+  const t = normalizeText(text);
+
+  if (!t) return false;
+
+  const objectionSignals = [
+    "what",
+    "why",
+    "how",
+    "dont remember",
+    "don't remember",
+    "not interested",
+    "already have",
+    "already got",
+    "through work",
+    "too expensive",
+    "cost",
+    "price",
+    "busy",
+    "call me later",
+    "who is this",
+    "who are you",
+    "sounds like",
+    "scam",
+    "remove me",
+    "stop calling",
+    "not now",
+    "cant talk",
+    "can't talk",
+    "working",
+    "at work",
+    "send me something",
+    "email me",
+    "text me",
+    "why do you need",
+    "i have questions",
+    "that makes no sense",
+    "hold on",
+    "wait",
+    "im confused",
+    "i'm confused",
+    "how do i know",
+    "is this legit",
+    "is this real",
+    "what do you mean",
+    "why do you need that",
+  ];
+
+  return objectionSignals.some((signal) => t.includes(signal));
 }
 
 function inferTimezoneFromState(state) {
@@ -1071,6 +1111,54 @@ Lead: ${JSON.stringify(session.lead)}
   }
 }
 
+async function getUnknownObjectionReply(session, callerText) {
+  try {
+    const currentStep = getCurrentStep(session);
+
+    const aiResponse = await openai.responses.create({
+      model: "gpt-4.1-mini",
+      input: [
+        {
+          role: "system",
+          content: `
+${VOICE_STYLE_INSTRUCTIONS}
+
+You are handling a homeowner objection or unexpected concern on a mortgage protection call.
+
+Rules:
+- Answer the objection briefly and naturally.
+- Sound calm, human, and conversational.
+- Keep it to 1 or 2 short sentences.
+- Do not invent detailed policy information, pricing, legal claims, underwriting promises, or company facts.
+- Do not sound pushy.
+- Do not restart the whole script.
+- After answering, smoothly hand control back to the scripted flow.
+- If the caller sounds skeptical, de-escalate politely.
+- If the caller asks a question, answer simply and safely.
+- If you're unsure, give a general answer and keep moving.
+
+Current script step: ${safeString(currentStep?.id)}
+Current script text: ${safeString(currentStep?.text)}
+Lead: ${JSON.stringify(session.lead)}
+`,
+        },
+        {
+          role: "user",
+          content: callerText,
+        },
+      ],
+    });
+
+    return (
+      aiResponse.output_text ||
+      "Okay, I got you. I'm just trying to make sure I'm looking at the right file here."
+    );
+  } catch (error) {
+    console.error("Unknown objection AI error:", error);
+    return "Okay, I got you. I'm just trying to make sure I'm looking at the right file here.";
+  }
+}
+
 /**
  * ============================================================================
  * ROUTES
@@ -1348,6 +1436,20 @@ async function handleStepResponse(ws, session, callerText) {
       sendVoice(ws, formatObjectionResponse(matchedObjection.response));
       return;
     }
+  }
+
+  if (detectPossibleUnknownObjection(text)) {
+    const freestyleReply = await getUnknownObjectionReply(session, callerText);
+    sendVoice(ws, freestyleReply);
+
+    if (moveToNextStep(session)) {
+      sendNextPrompt(ws, session);
+      return;
+    }
+
+    session.shouldEndCall = true;
+    sendVoice(ws, "Okay perfect. Thank you for your time.");
+    return;
   }
 
   switch (step.id) {
