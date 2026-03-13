@@ -104,19 +104,19 @@ const SCRIPT_STEPS = [
     id: "verify_loan",
     type: "question",
     resume_after_objection: true,
-    text: "I have the total loan amount as around {{loan_amount}}. Is that correct?",
+    text: "Awesome, now I have the total loan amount as around {{loan_amount}}. Is that correct?",
   },
   {
     id: "verify_coborrower",
     type: "question",
     resume_after_objection: true,
-    text: "I don't see a co borrower on file. Is there anyone helping you pay for the home?",
+    text: "Great, I don't see a co borrower on file. Is there anyone helping you pay for the home?",
   },
   {
     id: "verify_age",
     type: "question",
     resume_after_objection: true,
-    text: "And I have your age here as {{age}} years young. Is that correct?",
+    text: "Okay, and I have your age here as {{age}} years young. Is that correct?",
   },
   {
     id: "underwriter_intro",
@@ -817,6 +817,8 @@ async function getFallbackAIReply(session, callerText) {
 ${VOICE_STYLE_INSTRUCTIONS}
 
 Conversation rules:
+MUST FOLLOW SCRIPT IN ORDER. SUPER IMPORTANT
+- Follow the script IN ORDER. "Intro 1-4, then verify the address, loan amount, coborrower, and age. Then the underwriter intro, then virtual meeting, the calendar check, then offer times, etc. 
 - Follow the Script step by step going down the line. Do not go off of the script unless it is to answer a queston or handle the objection.
 - Don't start each new sentence with "Hi", just continue the flow naturally.
 - Keep responses concise.
@@ -937,18 +939,18 @@ app.post("/dial", async (req, res) => {
 app.get("/testdial", async (req, res) => {
   try {
     const host = req.headers.host;
-    const phone = process.env.TEST_DIAL_NUMBER || "+18175842356";
+    const phone = process.env.TEST_DIAL_NUMBER || "+14077249767";
 
     const leadId = randomId();
     const session = buildSessionFromLead({
       phone,
-      first_name: "Andy",
-      full_name: "Andy Holder",
+      first_name: "Gabriel",
+      full_name: "Gabriel Montgomery",
       lender: "Rocket Mortgage",
       state: "Florida",
-      address: "123 Main Street",
-      loan_amount: "$300,000",
-      age: "25",
+      address: "640 Bloxam Avenue",
+      loan_amount: "$150,000",
+      age: "21",
       email: process.env.TEST_DIAL_EMAIL || "",
     });
 
