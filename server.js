@@ -34,7 +34,11 @@ const openai = new OpenAI({
 });
 
 const VOICE_STYLE_INSTRUCTIONS = `
-You are a human-sounding mortgage protection case worker and appointment setter. You must follow the script in order do not hop around. Then only time you go off script is to handle objections. After the objections are handled continue where you left of in the script order.
+You are a human-sounding mortgage protection case worker and appointment setter.
+
+You must follow the script in order and not hop around.
+The only time you go off script is to handle objections or briefly answer a question.
+After objections are handled, continue where you left off in the script.
 
 Your speaking style must always sound:
 - calm
@@ -566,7 +570,8 @@ function advanceToNextStep(session) {
 }
 
 function rewindToLastQuestion(session) {
-  session.currentStepIndex = session.lastQuestionStepIndex || session.currentStepIndex;
+  session.currentStepIndex =
+    session.lastQuestionStepIndex || session.currentStepIndex;
 }
 
 function extractEmail(text) {
@@ -736,20 +741,57 @@ async function getCalendlyAvailableTimes(eventTypeUri, timezone) {
 
 function buildCalendlyQuestionsAndAnswers(session) {
   return [
-    { question: "Phone Number:", answer: safeString(session.lead.phone), position: 0 },
-    { question: "State:", answer: safeString(session.lead.state), position: 1 },
-    { question: "Original Mortgage Loan Amount:", answer: safeString(session.lead.loan_amount), position: 2 },
-    { question: "Lender:", answer: safeString(session.lead.lender), position: 3 },
-    { question: "Address:", answer: safeString(session.lead.address), position: 4 },
-    { question: "Age:", answer: safeString(session.lead.age), position: 5 },
-    { question: "Policy Review?", answer: safeString(session.lead.policy_review || "No"), position: 6 },
     {
-      question: "ONLY If Its a Policy Review\\nCarrier:\\nCoverage:\\nPremium:\\nProduct:",
+      question: "Phone Number:",
+      answer: safeString(session.lead.phone),
+      position: 0,
+    },
+    {
+      question: "State:",
+      answer: safeString(session.lead.state),
+      position: 1,
+    },
+    {
+      question: "Original Mortgage Loan Amount:",
+      answer: safeString(session.lead.loan_amount),
+      position: 2,
+    },
+    {
+      question: "Lender:",
+      answer: safeString(session.lead.lender),
+      position: 3,
+    },
+    {
+      question: "Address:",
+      answer: safeString(session.lead.address),
+      position: 4,
+    },
+    {
+      question: "Age:",
+      answer: safeString(session.lead.age),
+      position: 5,
+    },
+    {
+      question: "Policy Review?",
+      answer: safeString(session.lead.policy_review || "No"),
+      position: 6,
+    },
+    {
+      question:
+        "ONLY If Its a Policy Review\\nCarrier:\\nCoverage:\\nPremium:\\nProduct:",
       answer: safeString(session.lead.coverage || ""),
       position: 7,
     },
-    { question: "Language:", answer: safeString(session.lead.language || "English"), position: 8 },
-    { question: "Booked By:", answer: safeString(session.lead.booked_by || CALLER_NAME), position: 9 },
+    {
+      question: "Language:",
+      answer: safeString(session.lead.language || "English"),
+      position: 8,
+    },
+    {
+      question: "Booked By:",
+      answer: safeString(session.lead.booked_by || CALLER_NAME),
+      position: 9,
+    },
   ];
 }
 
@@ -818,9 +860,10 @@ ${VOICE_STYLE_INSTRUCTIONS}
 
 Conversation rules:
 MUST FOLLOW SCRIPT IN ORDER. SUPER IMPORTANT
-- Follow the script IN ORDER. "Intro 1-4, then verify the address, loan amount, coborrower, and age. Then the underwriter intro, then virtual meeting, the calendar check, then offer times, etc. 
-- Follow the Script step by step going down the line. Do not go off of the script unless it is to answer a queston or handle the objection.
-- Don't start each new sentence with "Hi", just continue the flow naturally.
+- Follow the script IN ORDER: intro 1 to 4, then verify the address, loan amount, coborrower, and age, then the underwriter intro, then virtual meeting, then calendar check, then offer times.
+- Follow the script step by step going down the line.
+- Do not go off script unless it is to answer a question or handle an objection.
+- Don't start each new sentence with "Hi". Continue the flow naturally.
 - Keep responses concise.
 - Usually keep replies to 1 or 2 sentences unless more detail is needed.
 - Ask one question at a time.
@@ -830,7 +873,8 @@ MUST FOLLOW SCRIPT IN ORDER. SUPER IMPORTANT
 - If possible, gently guide the caller back to the current step in the script.
 - Sound as human as possible.
 - Keep a slow pace, but match the homeowner's tonality if needed.
-- Always push towards booking the appointment. After handling an objection, Go back into the script where you left off to book the appointment.
+- Always push towards booking the appointment.
+- After handling an objection, go back into the script where you left off to book the appointment.
 - Ask the verification questions in order.
 
 Examples of the style:
@@ -850,7 +894,10 @@ Lead: ${JSON.stringify(session.lead)}
       ],
     });
 
-    return aiResponse.output_text || "Sorry, I didn't catch that. Could you repeat that for me?";
+    return (
+      aiResponse.output_text ||
+      "Sorry, I didn't catch that. Could you repeat that for me?"
+    );
   } catch (error) {
     console.error("Fallback AI error:", error);
     return "Sorry, I didn't catch that. Could you repeat that for me?";
@@ -887,6 +934,7 @@ app.post("/voice", (req, res) => {
   res.type("text/xml");
   res.send(twiml);
 });
+
 app.post("/dial", async (req, res) => {
   try {
     const host = req.headers.host;
@@ -1034,7 +1082,9 @@ async function handleConversationStart(ws, session) {
 }
 
 async function handleActiveObjectionBranch(ws, session, callerText) {
-  const objection = OBJECTION_LIBRARY.find((o) => o.id === session.activeObjection);
+  const objection = OBJECTION_LIBRARY.find(
+    (o) => o.id === session.activeObjection
+  );
 
   if (!objection) {
     session.activeObjection = null;
@@ -1092,6 +1142,7 @@ async function handleCoverageTypeAnswer(ws, session, callerText) {
 
 async function handleStepResponse(ws, session, callerText) {
   const step = getCurrentStep(session);
+  console.log("STEP:", step?.id, "| USER:", callerText);
 
   if (!step) {
     session.shouldEndCall = true;
@@ -1136,64 +1187,60 @@ async function handleStepResponse(ws, session, callerText) {
       return;
     }
 
-case "verify_address": {
-  if (detectNo(text)) {
-    session.notes.push({
-      type: "address_mismatch",
-      value: callerText,
-      at: Date.now(),
-    });
-  }
+    case "verify_address": {
+      if (detectNo(text)) {
+        session.notes.push({
+          type: "address_mismatch",
+          value: callerText,
+          at: Date.now(),
+        });
+      }
 
-  session.currentStepIndex = SCRIPT_STEPS.findIndex(
-    (s) => s.id === "verify_loan"
-  );
-  sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
-  return;
-}
+      session.currentStepIndex = SCRIPT_STEPS.findIndex(
+        (s) => s.id === "verify_loan"
+      );
+      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+      return;
+    }
 
-case "verify_loan": {
-  if (detectNo(text)) {
-    session.notes.push({
-      type: "loan_mismatch",
-      value: callerText,
-      at: Date.now(),
-    });
-  }
+    case "verify_loan": {
+      if (detectNo(text)) {
+        session.notes.push({
+          type: "loan_mismatch",
+          value: callerText,
+          at: Date.now(),
+        });
+      }
 
-  session.currentStepIndex = SCRIPT_STEPS.findIndex(
-    (s) => s.id === "verify_coborrower"
-  );
-  sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
-  return;
-}
+      session.currentStepIndex = SCRIPT_STEPS.findIndex(
+        (s) => s.id === "verify_coborrower"
+      );
+      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+      return;
+    }
 
-case "verify_coborrower": {
-  session.lead.co_borrower = normalized.includes("no") ? "No" : callerText;
+    case "verify_coborrower": {
+      session.lead.co_borrower = normalized.includes("no") ? "No" : callerText;
 
-  session.currentStepIndex = SCRIPT_STEPS.findIndex(
-    (s) => s.id === "verify_age"
-  );
-  sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
-  return;
-}
+      session.currentStepIndex = SCRIPT_STEPS.findIndex(
+        (s) => s.id === "verify_age"
+      );
+      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+      return;
+    }
 
-case "verify_age": {
-  if (detectNo(text)) {
-    session.notes.push({
-      type: "age_mismatch",
-      value: callerText,
-      at: Date.now(),
-    });
-  }
+    case "verify_age": {
+      if (detectNo(text)) {
+        session.notes.push({
+          type: "age_mismatch",
+          value: callerText,
+          at: Date.now(),
+        });
+      }
 
-  session.currentStepIndex = SCRIPT_STEPS.findIndex(
-    (s) => s.id === "underwriter_intro"
-  );
-  sendVoice(ws, buildPromptFromCurrentStep(session));
-  return;
-}
-      advanceToNextStep(session);
+      session.currentStepIndex = SCRIPT_STEPS.findIndex(
+        (s) => s.id === "underwriter_intro"
+      );
       sendVoice(ws, buildPromptFromCurrentStep(session));
       return;
     }
