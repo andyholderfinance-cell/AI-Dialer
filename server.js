@@ -541,19 +541,22 @@ function isQuestionLike(step) {
 function buildPromptFromCurrentStep(session) {
   const parts = [];
   let idx = session.currentStepIndex;
+  let questionStepIndex = session.currentStepIndex;
 
   while (idx < SCRIPT_STEPS.length) {
     const step = SCRIPT_STEPS[idx];
     parts.push(renderTemplate(step.text, session.lead));
 
     if (isQuestionLike(step)) {
+      questionStepIndex = idx;
       session.lastQuestionStepIndex = idx;
       break;
     }
 
     idx += 1;
-    if (idx >= SCRIPT_STEPS.length) break;
   }
+
+  session.currentStepIndex = questionStepIndex;
 
   return parts.join(" ");
 }
@@ -1182,13 +1185,9 @@ async function handleStepResponse(ws, session, callerText) {
 
     case "intro_4": {
       session.currentStepIndex = SCRIPT_STEPS.findIndex(
-        (s) => s.id === "verify_address"
+        (s) => s.id === "verify_intro"
       );
-      sendVoice(
-        ws,
-        "Okay perfect, I just need to verify a few things first to make sure I have the correct information on file."
-      );
-      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+      sendVoice(ws, buildPromptFromCurrentStep(session));
       return;
     }
 
@@ -1374,16 +1373,14 @@ async function handleStepResponse(ws, session, callerText) {
     }
 
     default: {
-      sendVoice(
-        ws,
-        "Okay, I'm just trying to make sure I stay on the right file here. Let me continue where I left off."
-      );
-
       const currentStep = getCurrentStep(session);
+
       if (currentStep) {
         sendVoice(ws, renderTemplate(currentStep.text, session.lead));
+        return;
       }
 
+      sendVoice(ws, "Okay, sorry about that.");
       return;
     }
   }
