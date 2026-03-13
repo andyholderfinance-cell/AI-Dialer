@@ -36,27 +36,21 @@ const openai = new OpenAI({
 const VOICE_STYLE_INSTRUCTIONS = `
 You are a human-sounding mortgage protection case worker and appointment setter.
 
-You must follow the script in order and not hop around.
-The only time you go off script is to handle objections or briefly answer a question.
-After objections are handled, continue where you left off in the script.
-
-Your speaking style must always sound:
+Your tone must sound:
 - calm
 - slow
 - natural
-- slightly confused or mildly concerned, as if you are looking at a file and trying to help clear something up
+- slightly confused or mildly concerned, like you're looking at a file that needs attention
 - warm and conversational
 - never robotic
-- never overly polished
+- never polished like an announcer
 - never salesy
 
 Tone rules:
-- Speak like a real person on the phone, not like a chatbot or announcer.
+- Speak like a real person on the phone.
 - Use short natural phrasing.
 - Occasionally use filler words like "um", "uh", "let me see", "okay", or "just a second" in a light natural way.
 - Do not overuse filler words.
-- Sound like you are thinking through the file as you talk.
-- Have a slightly concerned, slightly puzzled tone, like something on the file needs to be reviewed.
 - Stay polite and relaxed.
 - Never sound pushy, aggressive, scripted, or overly excited.
 `;
@@ -198,7 +192,7 @@ const OBJECTION_LIBRARY = [
     ],
     action: "resume_script",
     response: [
-      "Yea, so this is about the mortgage life and disability protection file that was opened up when you closed on your home",
+      "Yea, so this is about the mortgage life and disability protection file that was opened up when you closed on your home.",
       "[PAUSE_3_SECONDS]",
       "It's just showing up as incomplete or due for review.",
     ],
@@ -859,28 +853,13 @@ async function getFallbackAIReply(session, callerText) {
 ${VOICE_STYLE_INSTRUCTIONS}
 
 Conversation rules:
-MUST FOLLOW SCRIPT IN ORDER. SUPER IMPORTANT
-- Follow the script IN ORDER: intro 1-4, then verify the address, loan amount, coborrower, and age, then the underwriter intro, then virtual meeting, then calendar check, then offer times.
-- Follow the script step by step going down the line.
-- Do not go off script unless it is to answer a question or handle an objection.
-- Don't start each new sentence with "Hi". Continue the flow naturally.
-- Keep responses concise.
-- Ask one question at a time.
-- Do not mention AI, automation, prompts, or internal logic.
-- Do not invent company names, policy details, pricing, or legal statements.
-- If the caller sounds confused, explain simply and calmly.
-- Sound as human as possible.
-- Keep a slow pace, but match the homeowner's tonality if needed.
-- Always push towards booking the appointment.
-- After handling an objection, go back into the script where you left off to book the appointment.
-- Ask the verification questions in order.
-- Don't repeat the same question over and over, once you get your answer move on.
-
-Examples of the style:
-- "Um, it looks like this file is just showing incomplete on my end."
-- "Okay, let me see here for a second."
-- "I'm just trying to make sure I'm looking at the right information."
-- "It just looks like this never got fully reviewed."
+- You are only for brief clarification when the caller says something unexpected.
+- Do not continue the script on your own.
+- Do not invent new script lines.
+- Do not add new sales language.
+- Keep replies to one short sentence when possible.
+- After clarifying, gently return control back to the scripted step.
+- Do not restate large parts of the process unless the caller directly asks.
 
 Current step: ${safeString(getCurrentStep(session)?.id)}
 Lead: ${JSON.stringify(session.lead)}
@@ -895,11 +874,11 @@ Lead: ${JSON.stringify(session.lead)}
 
     return (
       aiResponse.output_text ||
-      "Sorry, I didn't catch that. Could you repeat that for me?"
+      "Okay, I'm just trying to make sure I'm looking at the right file here."
     );
   } catch (error) {
     console.error("Fallback AI error:", error);
-    return "Sorry, I didn't catch that. Could you repeat that for me?";
+    return "Okay, I'm just trying to make sure I'm looking at the right file here.";
   }
 }
 
@@ -1135,7 +1114,10 @@ async function handleCoverageTypeAnswer(ws, session, callerText) {
   const objectionBridge =
     "Got it. As long as you have something in place, that's exactly why the review is helpful.";
 
-  const resumePrompt = renderTemplate(getCurrentStep(session).text, session.lead);
+  const resumePrompt = renderTemplate(
+    getCurrentStep(session).text,
+    session.lead
+  );
   sendVoice(ws, `${objectionBridge} ${resumePrompt}`);
 }
 
@@ -1161,11 +1143,15 @@ async function handleStepResponse(ws, session, callerText) {
     }
 
     if (matchedObjection.action === "resume_script") {
-      const objectionReply = formatObjectionResponse(matchedObjection.response);
-      const resumePrompt = step.resume_after_objection
-        ? ` ${renderTemplate(step.text, session.lead)}`
-        : "";
-      sendVoice(ws, objectionReply + resumePrompt);
+      const objectionReply = formatObjectionResponse(
+        matchedObjection.response
+      );
+      sendVoice(ws, objectionReply);
+
+      if (step.resume_after_objection) {
+        sendVoice(ws, renderTemplate(step.text, session.lead));
+      }
+
       return;
     }
 
@@ -1178,11 +1164,31 @@ async function handleStepResponse(ws, session, callerText) {
   }
 
   switch (step.id) {
-    case "intro_1":
-    case "intro_2":
-    case "intro_4": {
-      advanceToNextStep(session);
+    case "intro_1": {
+      session.currentStepIndex = SCRIPT_STEPS.findIndex(
+        (s) => s.id === "intro_2"
+      );
+      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+      return;
+    }
+
+    case "intro_2": {
+      session.currentStepIndex = SCRIPT_STEPS.findIndex(
+        (s) => s.id === "intro_3"
+      );
       sendVoice(ws, buildPromptFromCurrentStep(session));
+      return;
+    }
+
+    case "intro_4": {
+      session.currentStepIndex = SCRIPT_STEPS.findIndex(
+        (s) => s.id === "verify_address"
+      );
+      sendVoice(
+        ws,
+        "Okay perfect, I just need to verify a few things first to make sure I have the correct information on file."
+      );
+      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
       return;
     }
 
@@ -1246,7 +1252,9 @@ async function handleStepResponse(ws, session, callerText) {
 
     case "virtual_meeting": {
       session.lead.meeting_type = detectZoomPreference(text) || "Phone";
-      advanceToNextStep(session);
+      session.currentStepIndex = SCRIPT_STEPS.findIndex(
+        (s) => s.id === "calendar_check"
+      );
       sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
 
       try {
@@ -1366,8 +1374,16 @@ async function handleStepResponse(ws, session, callerText) {
     }
 
     default: {
-      const fallback = await getFallbackAIReply(session, callerText);
-      sendVoice(ws, fallback);
+      sendVoice(
+        ws,
+        "Okay, I'm just trying to make sure I stay on the right file here. Let me continue where I left off."
+      );
+
+      const currentStep = getCurrentStep(session);
+      if (currentStep) {
+        sendVoice(ws, renderTemplate(currentStep.text, session.lead));
+      }
+
       return;
     }
   }
