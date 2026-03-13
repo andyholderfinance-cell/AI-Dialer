@@ -1136,47 +1136,63 @@ async function handleStepResponse(ws, session, callerText) {
       return;
     }
 
-    case "verify_address": {
-      if (detectNo(text)) {
-        session.notes.push({
-          type: "address_mismatch",
-          value: callerText,
-          at: Date.now(),
-        });
-      }
-      advanceToNextStep(session);
-      sendVoice(ws, buildPromptFromCurrentStep(session));
-      return;
-    }
+case "verify_address": {
+  if (detectNo(text)) {
+    session.notes.push({
+      type: "address_mismatch",
+      value: callerText,
+      at: Date.now(),
+    });
+  }
 
-    case "verify_loan": {
-      if (detectNo(text)) {
-        session.notes.push({
-          type: "loan_mismatch",
-          value: callerText,
-          at: Date.now(),
-        });
-      }
-      advanceToNextStep(session);
-      sendVoice(ws, buildPromptFromCurrentStep(session));
-      return;
-    }
+  session.currentStepIndex = SCRIPT_STEPS.findIndex(
+    (s) => s.id === "verify_loan"
+  );
+  sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+  return;
+}
 
-    case "verify_coborrower": {
-      session.lead.co_borrower = normalized.includes("no") ? "No" : callerText;
-      advanceToNextStep(session);
-      sendVoice(ws, buildPromptFromCurrentStep(session));
-      return;
-    }
+case "verify_loan": {
+  if (detectNo(text)) {
+    session.notes.push({
+      type: "loan_mismatch",
+      value: callerText,
+      at: Date.now(),
+    });
+  }
 
-    case "verify_age": {
-      if (detectNo(text)) {
-        session.notes.push({
-          type: "age_mismatch",
-          value: callerText,
-          at: Date.now(),
-        });
-      }
+  session.currentStepIndex = SCRIPT_STEPS.findIndex(
+    (s) => s.id === "verify_coborrower"
+  );
+  sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+  return;
+}
+
+case "verify_coborrower": {
+  session.lead.co_borrower = normalized.includes("no") ? "No" : callerText;
+
+  session.currentStepIndex = SCRIPT_STEPS.findIndex(
+    (s) => s.id === "verify_age"
+  );
+  sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+  return;
+}
+
+case "verify_age": {
+  if (detectNo(text)) {
+    session.notes.push({
+      type: "age_mismatch",
+      value: callerText,
+      at: Date.now(),
+    });
+  }
+
+  session.currentStepIndex = SCRIPT_STEPS.findIndex(
+    (s) => s.id === "underwriter_intro"
+  );
+  sendVoice(ws, buildPromptFromCurrentStep(session));
+  return;
+}
       advanceToNextStep(session);
       sendVoice(ws, buildPromptFromCurrentStep(session));
       return;
