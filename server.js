@@ -98,7 +98,7 @@ const SCRIPT_STEPS = [
     id: "underwriter_intro",
     type: "statement",
     resume_after_objection: true,
-    text: `${UNDERWRITER_NAME} is the underwriter for your county. He will be able to explain mortgage protection to you, as well as share his license with the state of {{state}}. He'll answer any questions you may have, pull up options tailored specifically to you, and help you apply for coverage.`,
+    text: `Andy Holder is the underwriter for your county. He will be able to explain mortgage protection to you, as well as share his license with the state of {{state}}. He'll answer any questions you may have, pull up options tailored specifically to you, and help you apply for coverage.`,
   },
   {
     id: "virtual_meeting",
@@ -110,7 +110,7 @@ const SCRIPT_STEPS = [
     id: "calendar_check",
     type: "statement",
     resume_after_objection: false,
-    text: `Okay, give me just a moment to look at ${UNDERWRITER_NAME}'s calendar.`,
+    text: `Okay, give me just a moment to look at Andy's calendar.`,
   },
   {
     id: "offer_times_today",
@@ -146,13 +146,13 @@ const SCRIPT_STEPS = [
     id: "reminder_instruction",
     type: "statement",
     resume_after_objection: false,
-    text: `About two to four hours before the appointment, go ahead and reconfirm so ${UNDERWRITER_NAME} knows to still attend. He helps a lot of homeowners and just wants to make sure he gets to everyone.`,
+    text: `About two to four hours before the appointment, go ahead and reconfirm so Andy knows to still attend. He helps a lot of homeowners and just wants to make sure he gets to everyone.`,
   },
   {
     id: "closing",
     type: "statement",
     resume_after_objection: false,
-    text: `${UNDERWRITER_NAME} will call you at {{scheduled_time}} your time. It was a pleasure speaking with you, and enjoy the rest of your day.`,
+    text: `Andy will call you at {{scheduled_time}} your time. It was a pleasure speaking with you, and enjoy the rest of your day.`,
   },
 ];
 
@@ -170,9 +170,7 @@ const OBJECTION_LIBRARY = [
     ],
     action: "resume_script",
     response: [
-      "It looks like back when you closed on your mortgage you filled out a request for information on the plan that would pay off your mortgage, or make those monthly payments for you if you were to become sick, disabled, or pass away.",
-      "[PAUSE_3_SECONDS]",
-      "It's just showing up as incomplete or due for review.",
+      "This is about the mortgage life and disability protection file that was sent in to us.,
     ],
   },
   {
@@ -282,7 +280,49 @@ const OBJECTION_LIBRARY = [
   },
 ];
 
-/**
+content: `
+You are a human-sounding mortgage protection case worker and appointment setter.
+
+Your speaking style must always sound:
+- calm
+- slow
+- natural
+- slightly confused or mildly concerned, as if you are looking at a file and trying to help clear something up
+- warm and conversational
+- never robotic
+- never overly polished
+- never salesy
+
+Tone rules:
+- Speak like a real person on the phone, not like a chatbot or announcer.
+- Use short natural phrasing.
+- Occasionally use filler words like "um", "uh", "let me see", "okay", or "just a second" in a light natural way.
+- Do not overuse filler words. Only use them once in a while so it sounds authentic.
+- Sound like you are thinking through the file as you talk.
+- Have a slightly concerned, slightly puzzled tone, like something on the file needs to be reviewed.
+- Stay polite and relaxed.
+- Never sound pushy, aggressive, scripted, or overly excited.
+
+Conversation rules:
+- Keep responses concise.
+- Usually keep replies to 1 or 2 sentences unless more detail is needed.
+- Ask one question at a time.
+- Do not mention AI, automation, prompts, or internal logic.
+- Do not invent company names, policy details, pricing, or legal statements.
+- If the caller sounds confused, explain simply and calmly.
+- If possible, gently guide the caller back to the current step in the script.
+- Sound as human as possible.
+
+Examples of the style:
+- "Um, it looks like this file is just showing incomplete on my end."
+- "Okay, let me see here for a second."
+- "I'm just trying to make sure I'm looking at the right information."
+- "It just looks like this never got fully reviewed."
+
+Current step: ${safeString(getCurrentStep(session)?.id)}
+Lead: ${JSON.stringify(session.lead)}
+`,/**
+
  * ============================================================================
  * SESSION STORE
  * ============================================================================
