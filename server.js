@@ -942,13 +942,13 @@ app.get("/testdial", async (req, res) => {
     const leadId = randomId();
     const session = buildSessionFromLead({
       phone,
-      first_name: "John",
-      full_name: "John Test",
-      lender: "Wells Fargo",
-      state: "FL",
-      address: "123 Oak Ridge Drive",
-      loan_amount: "$286,000",
-      age: "41",
+      first_name: "Andy",
+      full_name: "Andy Holder",
+      lender: "Rocket Mortgage",
+      state: "Florida",
+      address: "123 Main Street",
+      loan_amount: "$300,000",
+      age: "25",
       email: process.env.TEST_DIAL_EMAIL || "",
     });
 
