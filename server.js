@@ -33,6 +33,30 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
+const VOICE_STYLE_INSTRUCTIONS = `
+You are a human-sounding mortgage protection case worker and appointment setter.
+
+Your speaking style must always sound:
+- calm
+- slow
+- natural
+- slightly confused or mildly concerned, as if you are looking at a file and trying to help clear something up
+- warm and conversational
+- never robotic
+- never overly polished
+- never salesy
+
+Tone rules:
+- Speak like a real person on the phone, not like a chatbot or announcer.
+- Use short natural phrasing.
+- Occasionally use filler words like "um", "uh", "let me see", "okay", or "just a second" in a light natural way.
+- Do not overuse filler words.
+- Sound like you are thinking through the file as you talk.
+- Have a slightly concerned, slightly puzzled tone, like something on the file needs to be reviewed.
+- Stay polite and relaxed.
+- Never sound pushy, aggressive, scripted, or overly excited.
+`;
+
 /**
  * ============================================================================
  * SCRIPT + OBJECTIONS
@@ -98,7 +122,7 @@ const SCRIPT_STEPS = [
     id: "underwriter_intro",
     type: "statement",
     resume_after_objection: true,
-    text: `Andy Holder is the underwriter for your county. He will be able to explain mortgage protection to you, as well as share his license with the state of {{state}}. He'll answer any questions you may have, pull up options tailored specifically to you, and help you apply for coverage.`,
+    text: `${UNDERWRITER_NAME} is the underwriter for your county. He will be able to explain mortgage protection to you, as well as share his license with the state of {{state}}. He'll answer any questions you may have, pull up options tailored specifically to you, and help you apply for coverage.`,
   },
   {
     id: "virtual_meeting",
@@ -110,7 +134,7 @@ const SCRIPT_STEPS = [
     id: "calendar_check",
     type: "statement",
     resume_after_objection: false,
-    text: `Okay, give me just a moment to look at Andy's calendar.`,
+    text: `Okay, give me just a moment to look at ${UNDERWRITER_NAME}'s calendar.`,
   },
   {
     id: "offer_times_today",
@@ -146,13 +170,13 @@ const SCRIPT_STEPS = [
     id: "reminder_instruction",
     type: "statement",
     resume_after_objection: false,
-    text: `About two to four hours before the appointment, go ahead and reconfirm so Andy knows to still attend. He helps a lot of homeowners and just wants to make sure he gets to everyone.`,
+    text: `About two to four hours before the appointment, go ahead and reconfirm so ${UNDERWRITER_NAME} knows to still attend. He helps a lot of homeowners and just wants to make sure he gets to everyone.`,
   },
   {
     id: "closing",
     type: "statement",
     resume_after_objection: false,
-    text: `Andy will call you at {{scheduled_time}} your time. It was a pleasure speaking with you, and enjoy the rest of your day.`,
+    text: `${UNDERWRITER_NAME} will call you at {{scheduled_time}} your time. It was a pleasure speaking with you, and enjoy the rest of your day.`,
   },
 ];
 
@@ -170,7 +194,9 @@ const OBJECTION_LIBRARY = [
     ],
     action: "resume_script",
     response: [
-      "This is about the mortgage life and disability protection file that was sent in to us.,
+      "It looks like back when you closed on your mortgage you filled out a request for information on the plan that would pay off your mortgage, or make those monthly payments for you if you were to become sick, disabled, or pass away.",
+      "[PAUSE_3_SECONDS]",
+      "It's just showing up as incomplete or due for review.",
     ],
   },
   {
@@ -280,49 +306,7 @@ const OBJECTION_LIBRARY = [
   },
 ];
 
-content: `
-You are a human-sounding mortgage protection case worker and appointment setter.
-
-Your speaking style must always sound:
-- calm
-- slow
-- natural
-- slightly confused or mildly concerned, as if you are looking at a file and trying to help clear something up
-- warm and conversational
-- never robotic
-- never overly polished
-- never salesy
-
-Tone rules:
-- Speak like a real person on the phone, not like a chatbot or announcer.
-- Use short natural phrasing.
-- Occasionally use filler words like "um", "uh", "let me see", "okay", or "just a second" in a light natural way.
-- Do not overuse filler words. Only use them once in a while so it sounds authentic.
-- Sound like you are thinking through the file as you talk.
-- Have a slightly concerned, slightly puzzled tone, like something on the file needs to be reviewed.
-- Stay polite and relaxed.
-- Never sound pushy, aggressive, scripted, or overly excited.
-
-Conversation rules:
-- Keep responses concise.
-- Usually keep replies to 1 or 2 sentences unless more detail is needed.
-- Ask one question at a time.
-- Do not mention AI, automation, prompts, or internal logic.
-- Do not invent company names, policy details, pricing, or legal statements.
-- If the caller sounds confused, explain simply and calmly.
-- If possible, gently guide the caller back to the current step in the script.
-- Sound as human as possible.
-
-Examples of the style:
-- "Um, it looks like this file is just showing incomplete on my end."
-- "Okay, let me see here for a second."
-- "I'm just trying to make sure I'm looking at the right information."
-- "It just looks like this never got fully reviewed."
-
-Current step: ${safeString(getCurrentStep(session)?.id)}
-Lead: ${JSON.stringify(session.lead)}
-`,/**
-
+/**
  * ============================================================================
  * SESSION STORE
  * ============================================================================
@@ -360,6 +344,32 @@ function renderTemplate(text, lead) {
       ? String(lead[cleanKey])
       : "";
   });
+}
+
+function detectGoodbye(text) {
+  const t = normalizeText(text);
+
+  const goodbyes = [
+    "bye",
+    "goodbye",
+    "bye bye",
+    "have a good day",
+    "have a nice day",
+    "talk later",
+    "see you",
+    "see ya",
+    "alright bye",
+    "all right bye",
+    "ok bye",
+    "okay bye",
+    "thanks bye",
+    "thank you bye",
+    "gotta go",
+    "i have to go",
+    "i gotta go",
+  ];
+
+  return goodbyes.some((g) => t.includes(g));
 }
 
 function inferTimezoneFromState(state) {
@@ -681,6 +691,7 @@ async function calendlyFetch(path, options = {}) {
 
   const text = await response.text();
   let data = {};
+
   try {
     data = text ? JSON.parse(text) : {};
   } catch {
@@ -688,9 +699,7 @@ async function calendlyFetch(path, options = {}) {
   }
 
   if (!response.ok) {
-    throw new Error(
-      `Calendly ${response.status}: ${JSON.stringify(data)}`
-    );
+    throw new Error(`Calendly ${response.status}: ${JSON.stringify(data)}`);
   }
 
   return data;
@@ -707,7 +716,9 @@ async function getCalendlyAvailableTimes(eventTypeUri, timezone) {
     end_time: end.toISOString(),
   });
 
-  const data = await calendlyFetch(`/event_type_available_times?${params.toString()}`);
+  const data = await calendlyFetch(
+    `/event_type_available_times?${params.toString()}`
+  );
 
   const collection = Array.isArray(data.collection) ? data.collection : [];
 
@@ -732,7 +743,11 @@ function buildCalendlyQuestionsAndAnswers(session) {
     { question: "Address:", answer: safeString(session.lead.address), position: 4 },
     { question: "Age:", answer: safeString(session.lead.age), position: 5 },
     { question: "Policy Review?", answer: safeString(session.lead.policy_review || "No"), position: 6 },
-    { question: "ONLY If Its a Policy Review\\nCarrier:\\nCoverage:\\nPremium:\\nProduct:", answer: safeString(session.lead.coverage || ""), position: 7 },
+    {
+      question: "ONLY If Its a Policy Review\\nCarrier:\\nCoverage:\\nPremium:\\nProduct:",
+      answer: safeString(session.lead.coverage || ""),
+      position: 7,
+    },
     { question: "Language:", answer: safeString(session.lead.language || "English"), position: 8 },
     { question: "Booked By:", answer: safeString(session.lead.booked_by || CALLER_NAME), position: 9 },
   ];
@@ -799,14 +814,23 @@ async function getFallbackAIReply(session, callerText) {
         {
           role: "system",
           content: `
-You are a calm, professional mortgage protection appointment setter.
+${VOICE_STYLE_INSTRUCTIONS}
 
-Rules:
-- Be concise.
-- Sound human and conversational.
-- Do not mention AI.
-- Do not invent company names or product details.
-- If possible, guide the caller back to the current step.
+Conversation rules:
+- Keep responses concise.
+- Usually keep replies to 1 or 2 sentences unless more detail is needed.
+- Ask one question at a time.
+- Do not mention AI, automation, prompts, or internal logic.
+- Do not invent company names, policy details, pricing, or legal statements.
+- If the caller sounds confused, explain simply and calmly.
+- If possible, gently guide the caller back to the current step in the script.
+- Sound as human as possible.
+
+Examples of the style:
+- "Um, it looks like this file is just showing incomplete on my end."
+- "Okay, let me see here for a second."
+- "I'm just trying to make sure I'm looking at the right information."
+- "It just looks like this never got fully reviewed."
 
 Current step: ${safeString(getCurrentStep(session)?.id)}
 Lead: ${JSON.stringify(session.lead)}
@@ -1056,6 +1080,7 @@ async function handleCoverageTypeAnswer(ws, session, callerText) {
 
 async function handleStepResponse(ws, session, callerText) {
   const step = getCurrentStep(session);
+
   if (!step) {
     session.shouldEndCall = true;
     sendVoice(ws, "Thank you again. Have a great day.");
@@ -1101,7 +1126,11 @@ async function handleStepResponse(ws, session, callerText) {
 
     case "verify_address": {
       if (detectNo(text)) {
-        session.notes.push({ type: "address_mismatch", value: callerText, at: Date.now() });
+        session.notes.push({
+          type: "address_mismatch",
+          value: callerText,
+          at: Date.now(),
+        });
       }
       advanceToNextStep(session);
       sendVoice(ws, buildPromptFromCurrentStep(session));
@@ -1110,7 +1139,11 @@ async function handleStepResponse(ws, session, callerText) {
 
     case "verify_loan": {
       if (detectNo(text)) {
-        session.notes.push({ type: "loan_mismatch", value: callerText, at: Date.now() });
+        session.notes.push({
+          type: "loan_mismatch",
+          value: callerText,
+          at: Date.now(),
+        });
       }
       advanceToNextStep(session);
       sendVoice(ws, buildPromptFromCurrentStep(session));
@@ -1126,7 +1159,11 @@ async function handleStepResponse(ws, session, callerText) {
 
     case "verify_age": {
       if (detectNo(text)) {
-        session.notes.push({ type: "age_mismatch", value: callerText, at: Date.now() });
+        session.notes.push({
+          type: "age_mismatch",
+          value: callerText,
+          at: Date.now(),
+        });
       }
       advanceToNextStep(session);
       sendVoice(ws, buildPromptFromCurrentStep(session));
@@ -1140,11 +1177,15 @@ async function handleStepResponse(ws, session, callerText) {
 
       try {
         await primeCalendlySlots(session);
-        session.currentStepIndex = SCRIPT_STEPS.findIndex((s) => s.id === "offer_times_today");
+        session.currentStepIndex = SCRIPT_STEPS.findIndex(
+          (s) => s.id === "offer_times_today"
+        );
         sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
       } catch (error) {
         console.error("Calendly availability error:", error.message);
-        session.currentStepIndex = SCRIPT_STEPS.findIndex((s) => s.id === "collect_email");
+        session.currentStepIndex = SCRIPT_STEPS.findIndex(
+          (s) => s.id === "collect_email"
+        );
         sendVoice(
           ws,
           "It looks like the calendar is updating on my end. Let me grab a good email address and we'll send over the best available time."
@@ -1159,7 +1200,9 @@ async function handleStepResponse(ws, session, callerText) {
         normalized.includes("not today") ||
         normalized === "no"
       ) {
-        session.currentStepIndex = SCRIPT_STEPS.findIndex((s) => s.id === "offer_times_tomorrow");
+        session.currentStepIndex = SCRIPT_STEPS.findIndex(
+          (s) => s.id === "offer_times_tomorrow"
+        );
         sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
         return;
       }
@@ -1169,7 +1212,9 @@ async function handleStepResponse(ws, session, callerText) {
         session.pendingChosenSlot = chosen;
         session.lead.scheduled_time = chosen.localTime;
         session.lead.scheduled_time_utc = chosen.utcTime;
-        session.currentStepIndex = SCRIPT_STEPS.findIndex((s) => s.id === "collect_email");
+        session.currentStepIndex = SCRIPT_STEPS.findIndex(
+          (s) => s.id === "collect_email"
+        );
         sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
         return;
       }
@@ -1202,7 +1247,9 @@ async function handleStepResponse(ws, session, callerText) {
         session.pendingChosenSlot = chosen;
         session.lead.scheduled_time = chosen.localTime;
         session.lead.scheduled_time_utc = chosen.utcTime;
-        session.currentStepIndex = SCRIPT_STEPS.findIndex((s) => s.id === "collect_email");
+        session.currentStepIndex = SCRIPT_STEPS.findIndex(
+          (s) => s.id === "collect_email"
+        );
         sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
         return;
       }
@@ -1290,6 +1337,12 @@ wss.on("connection", (ws, req) => {
       if (data.type === "prompt" && data.voicePrompt) {
         const callerText = data.voicePrompt;
         console.log("Caller said:", callerText);
+
+        if (detectGoodbye(callerText)) {
+          session.shouldEndCall = true;
+          sendVoice(ws, "Alright, no problem. Have a great rest of your day.");
+          return;
+        }
 
         if (session.shouldEndCall) {
           sendVoice(ws, "Thank you. Goodbye.");
