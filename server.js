@@ -194,7 +194,7 @@ const OBJECTION_LIBRARY = [
     ],
     action: "resume_script",
     response: [
-      "It looks like back when you closed on your mortgage you filled out a request for information on the plan that would pay off your mortgage, or make those monthly payments for you if you were to become sick, disabled, or pass away.",
+      "Yea, so this is about the mortgage life and disability protection file that was opened up when you closed on your home,
       "[PAUSE_3_SECONDS]",
       "It's just showing up as incomplete or due for review.",
     ],
