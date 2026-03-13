@@ -181,16 +181,21 @@ const SCRIPT_STEPS = [
 const OBJECTION_LIBRARY = [
   {
     id: "what_is_this",
+    action: "resume_script_next_step",
     triggers: [
       "what is this",
-      "what's this about",
+      "what's this",
       "what is this about",
+      "what's this about",
       "what are you talking about",
       "what is this regarding",
-      "why are you calling",
       "what is this in reference to",
+      "why are you calling",
+      "why did you call",
+      "what are you calling about",
+      "what is this for",
+      "what is this even",
     ],
-    action: "resume_script",
     response: [
       "Yea, so this is about the mortgage life and disability protection file that was opened up when you closed on your home.",
       "[PAUSE_3_SECONDS]",
@@ -199,6 +204,7 @@ const OBJECTION_LIBRARY = [
   },
   {
     id: "not_interested",
+    action: "branch_followup",
     triggers: [
       "i'm not interested",
       "im not interested",
@@ -210,8 +216,12 @@ const OBJECTION_LIBRARY = [
       "i dont want it",
       "don't want it",
       "do not want it",
+      "i'm all set",
+      "im all set",
+      "not really interested",
+      "i'm okay",
+      "im okay",
     ],
-    action: "branch_followup",
     response: [
       "Okay no worries, before I close out your file, do you already have something in place to offset the cost of your mortgage if something were to happen to you, or are you just not concerned about it?",
     ],
@@ -227,8 +237,9 @@ const OBJECTION_LIBRARY = [
           "i have life insurance",
           "i have something through work",
           "covered",
+          "i have insurance",
+          "i have a policy",
         ],
-        action: "ask_followup_then_resume",
         response: [
           "Okay great, and is that a personal life policy, or something specifically for the mortgage?",
         ],
@@ -245,7 +256,6 @@ const OBJECTION_LIBRARY = [
           "not really",
           "no",
         ],
-        action: "close_file_end_call",
         response: [
           "Okay no worries, I'll go ahead and close out your file. Thank you for your time.",
         ],
@@ -254,6 +264,7 @@ const OBJECTION_LIBRARY = [
   },
   {
     id: "already_have_insurance",
+    action: "resume_script_next_step",
     triggers: [
       "i already have insurance",
       "i already got this taken care of",
@@ -263,30 +274,53 @@ const OBJECTION_LIBRARY = [
       "im already covered",
       "i have a policy already",
       "i already have something in place",
+      "i already have coverage",
+      "i've already got coverage",
+      "ive already got coverage",
+      "i already handled that",
+      "i'm covered",
+      "im covered",
+      "i have insurance through work",
     ],
-    action: "resume_script",
     response: [
       "Okay great, it makes sense as to why it says due for review. My job is just to get you appointed with the state underwriter so he can go over your policy to make sure you aren't overpaying and have all the correct benefits.",
     ],
   },
   {
     id: "never_filled_anything_out",
+    action: "resume_script_next_step",
     triggers: [
       "i never filled anything out",
       "i never filled that out",
+      "i never filled this out",
       "i didn't fill anything out",
       "i did not fill anything out",
+      "i didn't fill that out",
+      "i did not fill that out",
+      "i didn't fill this out",
+      "i did not fill this out",
       "i don't remember filling that out",
       "i dont remember filling that out",
+      "i don't remember filling this out",
+      "i dont remember filling this out",
+      "i don't remember that",
+      "i dont remember that",
+      "i don't remember doing that",
+      "i dont remember doing that",
+      "i don't recall filling this out",
+      "i dont recall filling this out",
       "i never requested that",
+      "i never asked for that",
+      "i dont remember applying",
+      "i don't remember applying",
     ],
-    action: "resume_script",
     response: [
       "No worries, most people don't remember. It might have been a while ago. We've been backed up due to COVID and layoffs, so we're just reaching back out to everyone we missed.",
     ],
   },
   {
     id: "do_not_call",
+    action: "end_call",
     triggers: [
       "stop calling me",
       "take me off your call list",
@@ -296,8 +330,10 @@ const OBJECTION_LIBRARY = [
       "do not call me again",
       "i already said no to this",
       "quit calling me",
+      "put me on do not call",
+      "take me off the list",
+      "remove me",
     ],
-    action: "end_call",
     response: [
       "Oh okay, sorry about that. I'll go ahead and close this out for you. Have a great day.",
     ],
@@ -325,6 +361,21 @@ function randomId() {
 function safeString(value) {
   if (value === undefined || value === null) return "";
   return String(value);
+}
+
+function containsAny(text, phrases) {
+  return phrases.some((phrase) => text.includes(normalizeText(phrase)));
+}
+
+function tokenize(text) {
+  return normalizeText(text)
+    .split(" ")
+    .filter(Boolean);
+}
+
+function hasWords(text, words) {
+  const tokens = new Set(tokenize(text));
+  return words.every((word) => tokens.has(word));
 }
 
 function normalizeText(text) {
@@ -534,6 +585,18 @@ function getCurrentStep(session) {
   return SCRIPT_STEPS[session.currentStepIndex] || null;
 }
 
+function getStepIndexById(stepId) {
+  return SCRIPT_STEPS.findIndex((step) => step.id === stepId);
+}
+
+function moveToNextStep(session) {
+  if (session.currentStepIndex < SCRIPT_STEPS.length - 1) {
+    session.currentStepIndex += 1;
+    return true;
+  }
+  return false;
+}
+
 function isQuestionLike(step) {
   return step && ["question", "input", "booking"].includes(step.type);
 }
@@ -559,11 +622,6 @@ function buildPromptFromCurrentStep(session) {
   session.currentStepIndex = questionStepIndex;
 
   return parts.join(" ");
-}
-
-function advanceToNextStep(session) {
-  session.currentStepIndex += 1;
-  return getCurrentStep(session);
 }
 
 function rewindToLastQuestion(session) {
@@ -606,12 +664,123 @@ function detectMorningAfternoon(text) {
 function detectObjection(text) {
   const t = normalizeText(text);
 
-  for (const objection of OBJECTION_LIBRARY) {
-    for (const trigger of objection.triggers) {
-      if (t.includes(normalizeText(trigger))) {
-        return objection;
-      }
-    }
+  if (!t) return null;
+
+  if (
+    containsAny(t, [
+      "stop calling me",
+      "take me off your call list",
+      "remove me from your list",
+      "don't call me again",
+      "dont call me again",
+      "do not call me again",
+      "take me off the list",
+      "put me on do not call",
+      "remove me",
+      "quit calling me",
+    ])
+  ) {
+    return OBJECTION_LIBRARY.find((o) => o.id === "do_not_call");
+  }
+
+  if (
+    containsAny(t, [
+      "i already have insurance",
+      "i already got this taken care of",
+      "i have something through work",
+      "i already have life insurance",
+      "i'm already covered",
+      "im already covered",
+      "i have a policy already",
+      "i already have something in place",
+      "i already have coverage",
+      "i've already got coverage",
+      "ive already got coverage",
+      "i'm covered",
+      "im covered",
+      "i have insurance through work",
+      "i have a policy",
+    ]) ||
+    ((t.includes("insurance") || t.includes("policy") || t.includes("covered")) &&
+      !t.includes("not"))
+  ) {
+    return OBJECTION_LIBRARY.find((o) => o.id === "already_have_insurance");
+  }
+
+  if (
+    containsAny(t, [
+      "i'm not interested",
+      "im not interested",
+      "not interested",
+      "no thanks",
+      "i'm good",
+      "im good",
+      "i do not want it",
+      "i dont want it",
+      "don't want it",
+      "do not want it",
+      "i'm all set",
+      "im all set",
+      "not really interested",
+      "i'm okay",
+      "im okay",
+    ])
+  ) {
+    return OBJECTION_LIBRARY.find((o) => o.id === "not_interested");
+  }
+
+  if (
+    containsAny(t, [
+      "i never filled anything out",
+      "i never filled that out",
+      "i never filled this out",
+      "i didn't fill anything out",
+      "i did not fill anything out",
+      "i didn't fill that out",
+      "i did not fill that out",
+      "i didn't fill this out",
+      "i did not fill this out",
+      "i don't remember filling that out",
+      "i dont remember filling that out",
+      "i don't remember filling this out",
+      "i dont remember filling this out",
+      "i don't remember that",
+      "i dont remember that",
+      "i don't remember doing that",
+      "i dont remember doing that",
+      "i don't recall filling this out",
+      "i dont recall filling this out",
+      "i never requested that",
+      "i never asked for that",
+      "i dont remember applying",
+      "i don't remember applying",
+    ]) ||
+    ((t.includes("remember") || t.includes("recall")) &&
+      (t.includes("fill") || t.includes("request") || t.includes("apply"))) ||
+    (t.includes("never") && (t.includes("filled") || t.includes("requested")))
+  ) {
+    return OBJECTION_LIBRARY.find((o) => o.id === "never_filled_anything_out");
+  }
+
+  if (
+    containsAny(t, [
+      "what is this",
+      "what's this",
+      "what is this about",
+      "what's this about",
+      "what are you talking about",
+      "what is this regarding",
+      "what is this in reference to",
+      "why are you calling",
+      "why did you call",
+      "what are you calling about",
+      "what is this for",
+      "what is this even",
+    ]) ||
+    ((t.includes("what") || t.includes("why")) &&
+      (t.includes("this") || t.includes("about") || t.includes("calling")))
+  ) {
+    return OBJECTION_LIBRARY.find((o) => o.id === "what_is_this");
   }
 
   return null;
@@ -624,10 +793,22 @@ function detectObjectionBranch(text, objection) {
 
   for (const [branchName, branch] of Object.entries(objection.branches)) {
     for (const trigger of branch.detect) {
-      if (t.includes(normalizeText(trigger))) {
+      const normalizedTrigger = normalizeText(trigger);
+      if (t.includes(normalizedTrigger) || normalizedTrigger.includes(t)) {
         return { branchName, branch };
       }
     }
+  }
+
+  if (
+    objection.id === "not_interested" &&
+    ((t.includes("insurance") || t.includes("policy") || t.includes("covered")) &&
+      !t.includes("not"))
+  ) {
+    return {
+      branchName: "has_coverage",
+      branch: objection.branches.has_coverage,
+    };
   }
 
   return null;
@@ -669,6 +850,11 @@ function chooseSlotFromResponse(text, session, pair = "first") {
   if (b && (t.includes("second") || t.includes("later"))) return b;
 
   return null;
+}
+
+function sendNextPrompt(ws, session) {
+  const prompt = buildPromptFromCurrentStep(session);
+  sendVoice(ws, prompt);
 }
 
 /**
@@ -861,7 +1047,7 @@ Conversation rules:
 - Do not invent new script lines.
 - Do not add new sales language.
 - Keep replies to one short sentence when possible.
-- After clarifying, gently return control back to the scripted step.
+- After clarifying, gently return control back to the scripted flow.
 - Do not restate large parts of the process unless the caller directly asks.
 
 Current step: ${safeString(getCurrentStep(session)?.id)}
@@ -1058,8 +1244,7 @@ async function primeCalendlySlots(session) {
 }
 
 async function handleConversationStart(ws, session) {
-  const openingPrompt = buildPromptFromCurrentStep(session);
-  sendVoice(ws, openingPrompt);
+  sendNextPrompt(ws, session);
 }
 
 async function handleActiveObjectionBranch(ws, session, callerText) {
@@ -1070,8 +1255,9 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
   if (!objection) {
     session.activeObjection = null;
     session.waitingForObjectionBranch = false;
-    rewindToLastQuestion(session);
-    sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+    if (moveToNextStep(session)) {
+      sendNextPrompt(ws, session);
+    }
     return;
   }
 
@@ -1112,16 +1298,14 @@ async function handleCoverageTypeAnswer(ws, session, callerText) {
   session.lead.coverage = callerText;
 
   session.waitingForCoverageTypeAnswer = false;
-  rewindToLastQuestion(session);
 
-  const objectionBridge =
-    "Got it. As long as you have something in place, that's exactly why the review is helpful.";
+  if (moveToNextStep(session)) {
+    sendNextPrompt(ws, session);
+    return;
+  }
 
-  const resumePrompt = renderTemplate(
-    getCurrentStep(session).text,
-    session.lead
-  );
-  sendVoice(ws, `${objectionBridge} ${resumePrompt}`);
+  session.shouldEndCall = true;
+  sendVoice(ws, "Okay perfect. Thank you for your time.");
 }
 
 async function handleStepResponse(ws, session, callerText) {
@@ -1145,16 +1329,16 @@ async function handleStepResponse(ws, session, callerText) {
       return;
     }
 
-    if (matchedObjection.action === "resume_script") {
-      const objectionReply = formatObjectionResponse(
-        matchedObjection.response
-      );
-      sendVoice(ws, objectionReply);
+    if (matchedObjection.action === "resume_script_next_step") {
+      sendVoice(ws, formatObjectionResponse(matchedObjection.response));
 
-      if (step.resume_after_objection) {
-        sendVoice(ws, renderTemplate(step.text, session.lead));
+      if (moveToNextStep(session)) {
+        sendNextPrompt(ws, session);
+        return;
       }
 
+      session.shouldEndCall = true;
+      sendVoice(ws, "Okay perfect. Thank you for your time.");
       return;
     }
 
@@ -1168,26 +1352,20 @@ async function handleStepResponse(ws, session, callerText) {
 
   switch (step.id) {
     case "intro_1": {
-      session.currentStepIndex = SCRIPT_STEPS.findIndex(
-        (s) => s.id === "intro_2"
-      );
+      session.currentStepIndex = getStepIndexById("intro_2");
       sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
       return;
     }
 
     case "intro_2": {
-      session.currentStepIndex = SCRIPT_STEPS.findIndex(
-        (s) => s.id === "intro_3"
-      );
-      sendVoice(ws, buildPromptFromCurrentStep(session));
+      session.currentStepIndex = getStepIndexById("intro_3");
+      sendNextPrompt(ws, session);
       return;
     }
 
     case "intro_4": {
-      session.currentStepIndex = SCRIPT_STEPS.findIndex(
-        (s) => s.id === "verify_intro"
-      );
-      sendVoice(ws, buildPromptFromCurrentStep(session));
+      session.currentStepIndex = getStepIndexById("verify_intro");
+      sendNextPrompt(ws, session);
       return;
     }
 
@@ -1200,9 +1378,7 @@ async function handleStepResponse(ws, session, callerText) {
         });
       }
 
-      session.currentStepIndex = SCRIPT_STEPS.findIndex(
-        (s) => s.id === "verify_loan"
-      );
+      session.currentStepIndex = getStepIndexById("verify_loan");
       sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
       return;
     }
@@ -1216,9 +1392,7 @@ async function handleStepResponse(ws, session, callerText) {
         });
       }
 
-      session.currentStepIndex = SCRIPT_STEPS.findIndex(
-        (s) => s.id === "verify_coborrower"
-      );
+      session.currentStepIndex = getStepIndexById("verify_coborrower");
       sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
       return;
     }
@@ -1226,9 +1400,7 @@ async function handleStepResponse(ws, session, callerText) {
     case "verify_coborrower": {
       session.lead.co_borrower = normalized.includes("no") ? "No" : callerText;
 
-      session.currentStepIndex = SCRIPT_STEPS.findIndex(
-        (s) => s.id === "verify_age"
-      );
+      session.currentStepIndex = getStepIndexById("verify_age");
       sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
       return;
     }
@@ -1242,31 +1414,23 @@ async function handleStepResponse(ws, session, callerText) {
         });
       }
 
-      session.currentStepIndex = SCRIPT_STEPS.findIndex(
-        (s) => s.id === "underwriter_intro"
-      );
-      sendVoice(ws, buildPromptFromCurrentStep(session));
+      session.currentStepIndex = getStepIndexById("underwriter_intro");
+      sendNextPrompt(ws, session);
       return;
     }
 
     case "virtual_meeting": {
       session.lead.meeting_type = detectZoomPreference(text) || "Phone";
-      session.currentStepIndex = SCRIPT_STEPS.findIndex(
-        (s) => s.id === "calendar_check"
-      );
+      session.currentStepIndex = getStepIndexById("calendar_check");
       sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
 
       try {
         await primeCalendlySlots(session);
-        session.currentStepIndex = SCRIPT_STEPS.findIndex(
-          (s) => s.id === "offer_times_today"
-        );
+        session.currentStepIndex = getStepIndexById("offer_times_today");
         sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
       } catch (error) {
         console.error("Calendly availability error:", error.message);
-        session.currentStepIndex = SCRIPT_STEPS.findIndex(
-          (s) => s.id === "collect_email"
-        );
+        session.currentStepIndex = getStepIndexById("collect_email");
         sendVoice(
           ws,
           "It looks like the calendar is updating on my end. Let me grab a good email address and we'll send over the best available time."
@@ -1281,9 +1445,7 @@ async function handleStepResponse(ws, session, callerText) {
         normalized.includes("not today") ||
         normalized === "no"
       ) {
-        session.currentStepIndex = SCRIPT_STEPS.findIndex(
-          (s) => s.id === "offer_times_tomorrow"
-        );
+        session.currentStepIndex = getStepIndexById("offer_times_tomorrow");
         sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
         return;
       }
@@ -1293,9 +1455,7 @@ async function handleStepResponse(ws, session, callerText) {
         session.pendingChosenSlot = chosen;
         session.lead.scheduled_time = chosen.localTime;
         session.lead.scheduled_time_utc = chosen.utcTime;
-        session.currentStepIndex = SCRIPT_STEPS.findIndex(
-          (s) => s.id === "collect_email"
-        );
+        session.currentStepIndex = getStepIndexById("collect_email");
         sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
         return;
       }
@@ -1315,9 +1475,7 @@ async function handleStepResponse(ws, session, callerText) {
         at: Date.now(),
       });
 
-      session.currentStepIndex = SCRIPT_STEPS.findIndex(
-        (s) => s.id === "offer_times_tomorrow_slots"
-      );
+      session.currentStepIndex = getStepIndexById("offer_times_tomorrow_slots");
       sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
       return;
     }
@@ -1328,9 +1486,7 @@ async function handleStepResponse(ws, session, callerText) {
         session.pendingChosenSlot = chosen;
         session.lead.scheduled_time = chosen.localTime;
         session.lead.scheduled_time_utc = chosen.utcTime;
-        session.currentStepIndex = SCRIPT_STEPS.findIndex(
-          (s) => s.id === "collect_email"
-        );
+        session.currentStepIndex = getStepIndexById("collect_email");
         sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
         return;
       }
@@ -1355,11 +1511,9 @@ async function handleStepResponse(ws, session, callerText) {
           at: Date.now(),
         });
 
-        advanceToNextStep(session);
-
-        const confirmationBundle = buildPromptFromCurrentStep(session);
+        moveToNextStep(session);
+        sendNextPrompt(ws, session);
         session.shouldEndCall = true;
-        sendVoice(ws, confirmationBundle);
       } catch (error) {
         console.error("Calendly booking error:", error.message);
 
@@ -1373,14 +1527,14 @@ async function handleStepResponse(ws, session, callerText) {
     }
 
     default: {
-      const currentStep = getCurrentStep(session);
+      const fallback = await getFallbackAIReply(session, callerText);
+      sendVoice(ws, fallback);
 
-      if (currentStep) {
+      const currentStep = getCurrentStep(session);
+      if (currentStep && isQuestionLike(currentStep)) {
         sendVoice(ws, renderTemplate(currentStep.text, session.lead));
-        return;
       }
 
-      sendVoice(ws, "Okay, sorry about that.");
       return;
     }
   }
