@@ -817,6 +817,7 @@ async function getFallbackAIReply(session, callerText) {
 ${VOICE_STYLE_INSTRUCTIONS}
 
 Conversation rules:
+- Don't start each new sentence with "Hi", just continue the flow naturally.
 - Keep responses concise.
 - Usually keep replies to 1 or 2 sentences unless more detail is needed.
 - Ask one question at a time.
