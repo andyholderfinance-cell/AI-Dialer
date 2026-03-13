@@ -939,18 +939,18 @@ app.post("/dial", async (req, res) => {
 app.get("/testdial", async (req, res) => {
   try {
     const host = req.headers.host;
-    const phone = process.env.TEST_DIAL_NUMBER || "+14077249767";
+    const phone = process.env.TEST_DIAL_NUMBER || "+18175842356";
 
     const leadId = randomId();
     const session = buildSessionFromLead({
       phone,
-      first_name: "Gabriel",
-      full_name: "Gabriel Montgomery",
+      first_name: "Andy",
+      full_name: "Andy Holder",
       lender: "Rocket Mortgage",
       state: "Florida",
-      address: "640 Bloxam Avenue",
+      address: "123 Main Street",
       loan_amount: "$150,000",
-      age: "21",
+      age: "25",
       email: process.env.TEST_DIAL_EMAIL || "",
     });
 
