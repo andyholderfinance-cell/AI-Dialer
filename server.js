@@ -67,7 +67,7 @@ app.get("/", (req, res) => {
 // Simple outbound test route
 app.get("/testdial", async (req, res) => {
   try {
-    const phone = "+18177090206";
+    const phone = "+18175842356";
 
     const call = await client.calls.create({
       to: phone,
