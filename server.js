@@ -195,11 +195,255 @@ const OBJECTION_LIBRARY = [
       "what are you calling about",
       "what is this for",
       "what is this even",
+      "what exactly is this",
+      "what exactly is this about",
+      "what is this call about",
+      "what are you referring to",
+      "what file",
+      "what do you mean",
+      "what are you talking about here",
+      "what is this concerning",
+      "what is this supposed to be",
+      "what is this in regards to",
+      "what are you even talking about",
+      "what are you talking about exactly",
+      "what is this all about",
     ],
     response: [
       "Yea, so this is about the mortgage life and disability protection file that was opened up when you closed on your home.",
       "[PAUSE_3_SECONDS]",
       "It's just showing up as incomplete or due for review.",
+    ],
+  },
+  {
+    id: "cost",
+    action: "resume_script_next_step",
+    triggers: [
+      "how much does this cost",
+      "how much is it",
+      "what does it cost",
+      "what is the cost",
+      "the cost",
+      "how much would it be",
+      "what would it cost",
+      "price",
+      "pricing",
+      "too expensive",
+      "how much",
+      "what's the price",
+      "what is the price",
+      "what would it run me",
+      "what would that cost me",
+      "how expensive is it",
+      "is it expensive",
+      "what's the monthly",
+      "what is the monthly",
+      "monthly payment",
+      "monthly premium",
+      "premium",
+      "how much per month",
+      "what are the payments",
+      "what kind of payment",
+      "what kind of payments",
+      "how much a month",
+      "how much monthly",
+      "what would my payment be",
+      "what would the premium be",
+    ],
+    response: [
+      "So the state underwriter will be able to pull up some options for you, but they are based on your current age and health. My job is just to get you appointed with the underwriter so he can go over those options with you.",
+    ],
+  },
+  {
+    id: "mandatory",
+    action: "resume_script_next_step",
+    triggers: [
+      "is this mandatory",
+      "is this required",
+      "do i have to do this",
+      "do i need to do this",
+      "is this something i have to have",
+      "do i have to have this",
+      "is this required by law",
+      "is this required for the mortgage",
+      "do i need this",
+      "is this necessary",
+      "is this something i need",
+      "am i required to do this",
+      "do i have to get this",
+    ],
+    response: [
+      "No, not at all, I'm just reaching out to see if anyone was able to take care of getting that coverage in place for you.",
+    ],
+  },
+  {
+    id: "who_do_you_work_for",
+    action: "resume_script_next_step",
+    triggers: [
+      "who do you work for",
+      "who are you with",
+      "what company do you work for",
+      "who do you work with",
+      "what company are you with",
+      "who is your company",
+      "who do you represent",
+      "what are you calling from",
+      "where are you calling from",
+      "who are you working with",
+      "what firm are you with",
+      "what company is this",
+      "who is this company",
+      "what organization are you with",
+    ],
+    response: [
+      "Yea of course, I work under the state underwriter assigned to your file. He is licensed with the state and contracted with multiple A-rated carriers. So we aren't tied to one specific company.",
+    ],
+  },
+  {
+    id: "email_it",
+    action: "resume_script_next_step",
+    triggers: [
+      "can you just email it to me",
+      "just email it to me",
+      "email it to me",
+      "can you email it",
+      "send it to me by email",
+      "send me something",
+      "can you just send me something",
+      "can you send that to me",
+      "just send it to me",
+      "email me the info",
+      "send me the information",
+      "can you text it to me",
+      "can you send me an email",
+      "just email me",
+      "send it over",
+      "can you just text me",
+      "can you send me the details",
+    ],
+    response: [
+      "I wish I could, that would make my job a lot easier, but your options are based on your current age and health, as well as financial needs. That is why we book a time to go over all that with the state underwriter.",
+    ],
+  },
+  {
+    id: "are_you_selling",
+    action: "resume_script_next_step",
+    triggers: [
+      "are you trying to sell me something",
+      "are you selling me insurance",
+      "are you trying to sell me insurance",
+      "is this a sales call",
+      "are you selling something",
+      "are you trying to sell me",
+      "is this sales",
+      "is this some kind of sales call",
+      "are you calling to sell me something",
+      "are you selling life insurance",
+      "are you pitching me something",
+      "is this a solicitation",
+      "are you marketing something to me",
+    ],
+    response: [
+      "Completely understand the concern, but no, not at all. Mortgage protection is something you have to apply for. It isn't something you can just buy off the shelf.",
+    ],
+  },
+  {
+    id: "call_back",
+    action: "resume_script_next_step",
+    triggers: [
+      "can you call me back",
+      "can i call you back",
+      "call me back",
+      "i'll call you back",
+      "call me later",
+      "can we do this later",
+      "can we talk later",
+      "i'm busy",
+      "im busy",
+      "i can't talk right now",
+      "i cant talk right now",
+      "not a good time",
+      "this is a bad time",
+      "i'm at work",
+      "im at work",
+      "can you ring me back",
+      "give me a call later",
+      "maybe call later",
+    ],
+    response: [
+      "Yea, of course. No decisions are being made on this call. It's just to find a time that you are available to speak with the underwriter.",
+    ],
+  },
+  {
+    id: "who_are_you",
+    action: "resume_script_next_step",
+    triggers: [
+      "who are you",
+      "what's your name",
+      "what is your name",
+      "who is this",
+      "who am i speaking with",
+      "who am i talking to",
+      "what did you say your name was",
+      "say your name again",
+      "who is calling",
+      "what was your name",
+      "who's this",
+    ],
+    response: [
+      `Of course, my name is ${CALLER_NAME}, I'm the case worker assigned to your mortgage protection file.`,
+    ],
+  },
+  {
+    id: "qualify",
+    action: "resume_script_next_step",
+    triggers: [
+      "wondering if i'd qualify",
+      "wondering if i would qualify",
+      "i don't think i'd qualify",
+      "i dont think id qualify",
+      "i don't think i would qualify",
+      "i dont think i would qualify",
+      "would i qualify",
+      "qualify",
+      "qualification",
+      "would i even qualify",
+      "i probably wouldn't qualify",
+      "i probably wont qualify",
+      "i don't know if i'd qualify",
+      "i dont know if id qualify",
+      "not sure if i qualify",
+      "can i qualify",
+      "would i be approved",
+      "i dont think i could get approved",
+    ],
+    response: [
+      "A lot of people feel that way initially, however the state underwriter is contracted with multiple A-rated carriers and would have no trouble finding one to qualify you.",
+    ],
+  },
+  {
+    id: "no_mortgage",
+    action: "resume_script_next_step",
+    triggers: [
+      "i don't have a mortgage",
+      "i dont have a mortgage",
+      "my house is paid off",
+      "my home is paid off",
+      "house is paid off",
+      "home is paid off",
+      "i paid it off",
+      "it's paid off",
+      "its paid off",
+      "i dont owe on the house",
+      "i don't owe on the house",
+      "i don't have a loan",
+      "i dont have a loan",
+      "mortgage is paid off",
+      "there is no mortgage",
+      "i own it outright",
+    ],
+    response: [
+      "Okay no worries let me just update your file here. Now mortgage protection is something that follows you specifically. So in the event that you no longer have a mortgage, you would still be covered if something were to happen to you. Whether that be income replacement, or final expenses.",
     ],
   },
   {
@@ -221,11 +465,65 @@ const OBJECTION_LIBRARY = [
       "not really interested",
       "i'm okay",
       "im okay",
+      "not for me",
+      "i'm fine",
+      "im fine",
+      "leave me alone",
+      "i dont need it",
+      "i don't need it",
+      "i'm not looking for anything",
+      "im not looking for anything",
+      "no thank you",
+      "not really",
+      "i'll pass",
     ],
     response: [
-      "Okay no worries, before I close out your file, do you already have something in place to offset the cost of your mortgage if something were to happen to you, or are you just not concerned about it?",
+      "Okay, no problem, let me just update your file. I know this was something that was important to you when you originally sent the request in. Are you unsure now because of the cost, or wondering if you'd qualify?",
     ],
     branches: {
+      cost_or_qualify: {
+        detect: [
+          "cost",
+          "price",
+          "pricing",
+          "too expensive",
+          "qualify",
+          "qualification",
+          "i don't think i'd qualify",
+          "i dont think id qualify",
+          "wondering if i'd qualify",
+          "wondering if i would qualify",
+          "not sure i qualify",
+          "dont think i qualify",
+          "don't think i qualify",
+          "i probably wouldnt qualify",
+          "i probably wouldn't qualify",
+        ],
+        response: [
+          "A lot of people feel that way initially. The underwriter will be able to go over that with you and show you what options are available.",
+        ],
+      },
+      still_not_interested: {
+        detect: [
+          "still not interested",
+          "not interested",
+          "no",
+          "nope",
+          "just not interested",
+          "i'm good",
+          "im good",
+          "leave it alone",
+          "i'm okay",
+          "im okay",
+          "no thank you",
+          "i'll pass",
+          "dont want it",
+          "don't want it",
+        ],
+        response: [
+          "Okay no worries, before I close out your file, do you already have something in place to offset the cost of your mortgage if something were to happen to you, or are you just not concerned about it?",
+        ],
+      },
       has_coverage: {
         detect: [
           "yes",
@@ -239,6 +537,10 @@ const OBJECTION_LIBRARY = [
           "covered",
           "i have insurance",
           "i have a policy",
+          "i have coverage",
+          "i have something in place",
+          "i'm covered",
+          "im covered",
         ],
         response: [
           "Okay great, and is that a personal life policy, or something specifically for the mortgage?",
@@ -254,7 +556,10 @@ const OBJECTION_LIBRARY = [
           "close it out",
           "just close it out",
           "not really",
-          "no",
+          "leave it alone",
+          "not concerned about it",
+          "i dont care",
+          "i don't care",
         ],
         response: [
           "Okay no worries, I'll go ahead and close out your file. Thank you for your time.",
@@ -281,6 +586,16 @@ const OBJECTION_LIBRARY = [
       "i'm covered",
       "im covered",
       "i have insurance through work",
+      "i have a policy",
+      "i already have life",
+      "i got life insurance",
+      "i already got life insurance",
+      "i'm good on insurance",
+      "im good on insurance",
+      "i have coverage already",
+      "already got a policy",
+      "i already took care of that",
+      "i have something in place",
     ],
     response: [
       "Okay great, it makes sense as to why it says due for review. My job is just to get you appointed with the state underwriter so he can go over your policy to make sure you aren't overpaying and have all the correct benefits.",
@@ -313,6 +628,14 @@ const OBJECTION_LIBRARY = [
       "i never asked for that",
       "i dont remember applying",
       "i don't remember applying",
+      "i never applied for that",
+      "i didnt apply for that",
+      "i did not apply for that",
+      "i never asked for this",
+      "i dont remember signing up for that",
+      "i didn't sign up for that",
+      "i did not sign up for that",
+      "i never signed up for that",
     ],
     response: [
       "No worries, most people don't remember. It might have been a while ago. We've been backed up due to COVID and layoffs, so we're just reaching back out to everyone we missed.",
@@ -333,6 +656,12 @@ const OBJECTION_LIBRARY = [
       "put me on do not call",
       "take me off the list",
       "remove me",
+      "stop calling",
+      "leave me alone",
+      "take me off",
+      "put me on the do not call list",
+      "don't ring me again",
+      "do not ring me again",
     ],
     response: [
       "Oh okay, sorry about that. I'll go ahead and close this out for you. Have a great day.",
@@ -706,121 +1035,13 @@ function detectObjection(text) {
 
   if (!t) return null;
 
-  if (
-    containsAny(t, [
-      "stop calling me",
-      "take me off your call list",
-      "remove me from your list",
-      "don't call me again",
-      "dont call me again",
-      "do not call me again",
-      "take me off the list",
-      "put me on do not call",
-      "remove me",
-      "quit calling me",
-    ])
-  ) {
-    return OBJECTION_LIBRARY.find((o) => o.id === "do_not_call");
-  }
-
-  if (
-    containsAny(t, [
-      "i already have insurance",
-      "i already got this taken care of",
-      "i have something through work",
-      "i already have life insurance",
-      "i'm already covered",
-      "im already covered",
-      "i have a policy already",
-      "i already have something in place",
-      "i already have coverage",
-      "i've already got coverage",
-      "ive already got coverage",
-      "i'm covered",
-      "im covered",
-      "i have insurance through work",
-      "i have a policy",
-    ]) ||
-    ((t.includes("insurance") || t.includes("policy") || t.includes("covered")) &&
-      !t.includes("not"))
-  ) {
-    return OBJECTION_LIBRARY.find((o) => o.id === "already_have_insurance");
-  }
-
-  if (
-    containsAny(t, [
-      "i'm not interested",
-      "im not interested",
-      "not interested",
-      "no thanks",
-      "i'm good",
-      "im good",
-      "i do not want it",
-      "i dont want it",
-      "don't want it",
-      "do not want it",
-      "i'm all set",
-      "im all set",
-      "not really interested",
-      "i'm okay",
-      "im okay",
-    ])
-  ) {
-    return OBJECTION_LIBRARY.find((o) => o.id === "not_interested");
-  }
-
-  if (
-    containsAny(t, [
-      "i never filled anything out",
-      "i never filled that out",
-      "i never filled this out",
-      "i didn't fill anything out",
-      "i did not fill anything out",
-      "i didn't fill that out",
-      "i did not fill that out",
-      "i didn't fill this out",
-      "i did not fill this out",
-      "i don't remember filling that out",
-      "i dont remember filling that out",
-      "i don't remember filling this out",
-      "i dont remember filling this out",
-      "i don't remember that",
-      "i dont remember that",
-      "i don't remember doing that",
-      "i dont remember doing that",
-      "i don't recall filling this out",
-      "i dont recall filling this out",
-      "i never requested that",
-      "i never asked for that",
-      "i dont remember applying",
-      "i don't remember applying",
-    ]) ||
-    ((t.includes("remember") || t.includes("recall")) &&
-      (t.includes("fill") || t.includes("request") || t.includes("apply"))) ||
-    (t.includes("never") && (t.includes("filled") || t.includes("requested")))
-  ) {
-    return OBJECTION_LIBRARY.find((o) => o.id === "never_filled_anything_out");
-  }
-
-  if (
-    containsAny(t, [
-      "what is this",
-      "what's this",
-      "what is this about",
-      "what's this about",
-      "what are you talking about",
-      "what is this regarding",
-      "what is this in reference to",
-      "why are you calling",
-      "why did you call",
-      "what are you calling about",
-      "what is this for",
-      "what is this even",
-    ]) ||
-    ((t.includes("what") || t.includes("why")) &&
-      (t.includes("this") || t.includes("about") || t.includes("calling")))
-  ) {
-    return OBJECTION_LIBRARY.find((o) => o.id === "what_is_this");
+  for (const objection of OBJECTION_LIBRARY) {
+    for (const trigger of objection.triggers) {
+      const normalizedTrigger = normalizeText(trigger);
+      if (t.includes(normalizedTrigger) || normalizedTrigger.includes(t)) {
+        return objection;
+      }
+    }
   }
 
   return null;
@@ -1123,23 +1344,47 @@ async function getUnknownObjectionReply(session, callerText) {
           content: `
 ${VOICE_STYLE_INSTRUCTIONS}
 
-You are handling a homeowner objection or unexpected concern on a mortgage protection call.
+You are responding to a homeowner during a scripted mortgage protection call.
 
-Rules:
-- Answer the objection briefly and naturally.
-- Sound calm, human, and conversational.
-- Keep it to 1 or 2 short sentences.
-- Do not invent detailed policy information, pricing, legal claims, underwriting promises, or company facts.
-- Do not sound pushy.
-- Do not restart the whole script.
-- After answering, smoothly hand control back to the scripted flow.
-- If the caller sounds skeptical, de-escalate politely.
-- If the caller asks a question, answer simply and safely.
-- If you're unsure, give a general answer and keep moving.
+CRITICAL RULE:
+Your response MUST stay aligned with the script narrative.
+
+The script narrative is:
+• A mortgage protection file was opened during the home closing
+• The file shows incomplete or due for review
+• You are the case worker assigned to the file
+• Your job is to verify the information and get them appointed with the underwriter
+
+You may clarify confusion, but you must NOT introduce new explanations, services, or processes.
+
+Do NOT:
+• invent policies
+• invent companies
+• invent prices
+• invent underwriting rules
+• change the purpose of the call
+• create a new sales pitch
+• restart the script
+
+Your job is ONLY to briefly smooth over confusion and guide the conversation back to the script.
+
+Response rules:
+• 1 sentence preferred
+• 2 sentences maximum
+• under 25 words
+• natural human tone
+• calm and conversational
+• may start with phrases like:
+  "Um,"
+  "Yeah so"
+  "No worries,"
+  "I got you,"
+  "From what I'm seeing here"
+• If possible, reuse wording from the script itself.
 
 Current script step: ${safeString(currentStep?.id)}
-Current script text: ${safeString(currentStep?.text)}
-Lead: ${JSON.stringify(session.lead)}
+Script line: ${safeString(currentStep?.text)}
+Lead info: ${JSON.stringify(session.lead)}
 `,
         },
         {
@@ -1151,11 +1396,11 @@ Lead: ${JSON.stringify(session.lead)}
 
     return (
       aiResponse.output_text ||
-      "Okay, I got you. I'm just trying to make sure I'm looking at the right file here."
+      "I got you, I'm just trying to make sure I'm looking at the right file here."
     );
   } catch (error) {
     console.error("Unknown objection AI error:", error);
-    return "Okay, I got you. I'm just trying to make sure I'm looking at the right file here.";
+    return "I got you, I'm just trying to make sure I'm looking at the right file here.";
   }
 }
 
@@ -1336,9 +1581,138 @@ async function handleConversationStart(ws, session) {
 }
 
 async function handleActiveObjectionBranch(ws, session, callerText) {
-  const objection = OBJECTION_LIBRARY.find(
-    (o) => o.id === session.activeObjection
-  );
+  const activeId = session.activeObjection;
+
+  if (activeId === "not_interested") {
+    const t = normalizeText(callerText);
+
+    if (
+      containsAny(t, [
+        "cost",
+        "price",
+        "pricing",
+        "too expensive",
+        "qualify",
+        "qualification",
+        "i don't think i'd qualify",
+        "i dont think id qualify",
+        "wondering if i'd qualify",
+        "wondering if i would qualify",
+        "not sure i qualify",
+        "dont think i qualify",
+        "don't think i qualify",
+        "i probably wouldnt qualify",
+        "i probably wouldn't qualify",
+      ])
+    ) {
+      sendVoice(
+        ws,
+        "A lot of people feel that way initially. The underwriter will be able to go over that with you and show you what options are available."
+      );
+      session.activeObjection = "not_interested_coverage_check";
+      sendVoice(
+        ws,
+        "Okay no worries, before I close out your file, do you already have something in place to offset the cost of your mortgage if something were to happen to you, or are you just not concerned about it?"
+      );
+      return;
+    }
+
+    if (
+      containsAny(t, [
+        "still not interested",
+        "not interested",
+        "no",
+        "nope",
+        "just not interested",
+        "i'm good",
+        "im good",
+        "leave it alone",
+        "i'm okay",
+        "im okay",
+        "no thank you",
+        "i'll pass",
+        "dont want it",
+        "don't want it",
+      ])
+    ) {
+      session.activeObjection = "not_interested_coverage_check";
+      sendVoice(
+        ws,
+        "Okay no worries, before I close out your file, do you already have something in place to offset the cost of your mortgage if something were to happen to you, or are you just not concerned about it?"
+      );
+      return;
+    }
+
+    sendVoice(
+      ws,
+      "Just so I handle this correctly, are you unsure because of the cost, wondering if you'd qualify, or are you just not interested in going over it?"
+    );
+    return;
+  }
+
+  if (activeId === "not_interested_coverage_check") {
+    const t = normalizeText(callerText);
+
+    if (
+      containsAny(t, [
+        "yes",
+        "yeah",
+        "i do",
+        "i have something",
+        "already covered",
+        "i already have coverage",
+        "i have life insurance",
+        "i have something through work",
+        "covered",
+        "i have insurance",
+        "i have a policy",
+        "i have coverage",
+        "i have something in place",
+        "i'm covered",
+        "im covered",
+      ])
+    ) {
+      session.waitingForObjectionBranch = false;
+      session.activeObjection = null;
+      session.waitingForCoverageTypeAnswer = true;
+      sendVoice(
+        ws,
+        "Okay great, and is that a personal life policy, or something specifically for the mortgage?"
+      );
+      return;
+    }
+
+    if (
+      containsAny(t, [
+        "not concerned",
+        "don't care",
+        "dont care",
+        "do not care",
+        "not worried about it",
+        "close it out",
+        "just close it out",
+        "not really",
+        "no",
+      ])
+    ) {
+      session.shouldEndCall = true;
+      session.waitingForObjectionBranch = false;
+      session.activeObjection = null;
+      sendVoice(
+        ws,
+        "Okay no worries, I'll go ahead and close out your file, thank you for your time."
+      );
+      return;
+    }
+
+    sendVoice(
+      ws,
+      "Just so I update it correctly, do you already have something in place, or are you just not concerned about it?"
+    );
+    return;
+  }
+
+  const objection = OBJECTION_LIBRARY.find((o) => o.id === activeId);
 
   if (!objection) {
     session.activeObjection = null;
@@ -1363,6 +1737,7 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
 
   if (branchName === "has_coverage") {
     session.waitingForObjectionBranch = false;
+    session.activeObjection = null;
     session.waitingForCoverageTypeAnswer = true;
     sendVoice(ws, formatObjectionResponse(branch.response));
     return;
@@ -1370,6 +1745,8 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
 
   if (branchName === "not_concerned") {
     session.shouldEndCall = true;
+    session.waitingForObjectionBranch = false;
+    session.activeObjection = null;
     sendVoice(ws, formatObjectionResponse(branch.response));
     return;
   }
