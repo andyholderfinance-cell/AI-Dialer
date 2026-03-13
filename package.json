@@ -9,6 +9,7 @@
   "dependencies": {
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "node-fetch": "^2.7.0",
     "openai": "^4.104.0",
     "twilio": "^5.5.3",
     "ws": "^8.18.0"
