@@ -71,12 +71,12 @@ const SCRIPT_STEPS = [
   {
     id: "intro_1",
     type: "question",
-    text: "Hey, {{first_name}}?",
+    text: "Hey, is this {{first_name}}?",
   },
   {
     id: "intro_2",
     type: "question",
-    text: `Hey {{first_name}}, this is ${CALLER_NAME}. I'm just giving you a quick call about the mortgage protection information tied to your home loan with {{lender}}... Does that ring a bell?`,
+    text: `Hey {{first_name}}, this is ${CALLER_NAME}. I'm just giving you a quick call about the mortgage life and disability protection information tied to your home loan with {{lender}}... Does that ring a bell?`,
   },
   {
     id: "intro_3",
@@ -106,7 +106,7 @@ const SCRIPT_STEPS = [
   {
     id: "verify_loan",
     type: "question",
-    text: "Got it. I also have the loan amount as around {{loan_amount}}. Is that correct?",
+    text: "Got it. I also have the loan amount at about {{loan_amount}}. Is that correct?",
   },
   {
     id: "verify_loan_update",
@@ -116,7 +116,7 @@ const SCRIPT_STEPS = [
   {
     id: "verify_coborrower",
     type: "question",
-    text: "And do you have anyone helping you with the home, like a co borrower or co owner?",
+    text: "And I don't see a co-borrower on file, is it just you paying for the home?",
   },
   {
     id: "verify_age",
