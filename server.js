@@ -66,13 +66,13 @@ const SCRIPT_STEPS = [
     id: "intro_1",
     type: "question",
     resume_after_objection: true,
-    text: "Hey, is this {{first_name}}?",
+    text: "Hey, {{first_name}}?",
   },
   {
     id: "intro_2",
     type: "question",
     resume_after_objection: true,
-    text: `Hey {{first_name}}, this is ${CALLER_NAME}, a case worker here in {{state}}. I'm calling in regards to the mortgage life and disability protection file that was opened back when you closed with {{lender}}. Does that sound familiar?`,
+    text: `Hey {{first_name}}, this is Josh. I'm just giving you a quick call about the mortgage protection information tied to your home loan with {{lender}}. Does that ring a bell?`,
   },
   {
     id: "intro_3",
