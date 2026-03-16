@@ -78,12 +78,12 @@ const SCRIPT_STEPS = [
   {
     id: "intro_3",
     type: "statement",
-    text: "Okay, from what I'm seeing here, it was a request for information on the plan that would pay of your mortgage, or make those monthly payemts for you if you were to become sick, disabled, or passed away. I'ts just showing up as incomplete or due for review.",
+    text: "Okay, from what I'm seeing here, it was a request for information on the plan that would pay of your mortgage, or make those monthly payments for you if you were to become sick, disabled, or passed away. i'ts just showing up as incomplete or due for review.",
   },
   {
     id: "intro_4",
     type: "question",
-    text: `My job is just to verify the information and get you appointed with the state underwriter, ${UNDERWRITER_NAME}, so he can go over your options. Does that make sense?`,
+    text: `My job is just to verify the information and get you appointed with the state underwriter, so he can go over your options. Does that make sense?`,
   },
   {
     id: "verify_intro",
