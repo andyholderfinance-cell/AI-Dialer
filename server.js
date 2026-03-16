@@ -1106,6 +1106,54 @@ function detectBlankish(text) {
   return !t || ["uh", "um", "hmm", "mm", "huh"].includes(t);
 }
 
+function normalizeSpokenEmail(text) {
+  if (!text) return "";
+
+  return String(text)
+    .toLowerCase()
+    .replace(/\s*\(\s*at\s*\)\s*/g, "@")
+    .replace(/\s*\[\s*at\s*\]\s*/g, "@")
+    .replace(/\s+at\s+/g, "@")
+    .replace(/\s+dot\s+/g, ".")
+    .replace(/\s+underscore\s+/g, "_")
+    .replace(/\s+dash\s+/g, "-")
+    .replace(/\s+hyphen\s+/g, "-")
+    .replace(/\s+/g, "")
+    .replace(/,+/g, "")
+    .trim();
+}
+
+function extractEmail(text) {
+  const normalized = normalizeSpokenEmail(text);
+  const emailRegex = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
+  const match = normalized.match(emailRegex);
+  return match ? match[0] : null;
+}
+
+function validateEnv() {
+  const missing = [];
+
+  if (!process.env.OPENAI_API_KEY) missing.push("OPENAI_API_KEY");
+  if (!process.env.TWILIO_ACCOUNT_SID) missing.push("TWILIO_ACCOUNT_SID");
+  if (!process.env.TWILIO_AUTH_TOKEN) missing.push("TWILIO_AUTH_TOKEN");
+  if (!process.env.TWILIO_PHONE_NUMBER) missing.push("TWILIO_PHONE_NUMBER");
+  if (!process.env.CALENDLY_API_KEY) missing.push("CALENDLY_API_KEY");
+  if (!process.env.CALENDLY_EVENT_TYPE_URI) missing.push("CALENDLY_EVENT_TYPE_URI");
+
+  if (missing.length) {
+    console.error("Missing required env vars:", missing.join(", "));
+  }
+
+  if (
+    process.env.CALENDLY_EVENT_TYPE_URI &&
+    !process.env.CALENDLY_EVENT_TYPE_URI.startsWith("https://api.calendly.com/event_types/")
+  ) {
+    console.error(
+      "CALENDLY_EVENT_TYPE_URI does not look like a Calendly API event type URI."
+    );
+  }
+}
+
 function buildSessionFromLead(lead = {}) {
   const timezone =
     lead.timezone || inferTimezoneFromState(lead.state || lead.state_code);
@@ -1142,7 +1190,7 @@ function buildSessionFromLead(lead = {}) {
     coverage_type: "",
     language: lead.language || "English",
     booked_by: lead.booked_by || CALLER_NAME,
-    lead_type: lead.lead_type || "aged", // fresh | aged | warm
+    lead_type: lead.lead_type || "aged",
     no_mortgage: "No",
   };
 
@@ -1268,12 +1316,6 @@ function buildPromptFromCurrentStep(session) {
 
   session.currentStepIndex = questionStepIndex;
   return parts.join(" ");
-}
-
-function extractEmail(text) {
-  const emailRegex = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i;
-  const match = safeString(text).match(emailRegex);
-  return match ? match[0] : null;
 }
 
 function detectNo(text) {
@@ -1878,17 +1920,31 @@ async function calendlyFetch(path, options = {}) {
     },
   });
 
-  const text = await response.text();
+  const rawText = await response.text();
   let data = {};
 
   try {
-    data = text ? JSON.parse(text) : {};
+    data = rawText ? JSON.parse(rawText) : {};
   } catch {
-    data = { raw: text };
+    data = { raw: rawText };
   }
 
   if (!response.ok) {
-    throw new Error(`Calendly ${response.status}: ${JSON.stringify(data)}`);
+    console.error("Calendly API failure", {
+      path,
+      method: options.method || "GET",
+      status: response.status,
+      response: data,
+    });
+
+    const err = new Error(
+      `Calendly request failed | ${options.method || "GET"} ${path} | status=${response.status} | body=${JSON.stringify(
+        data
+      )}`
+    );
+    err.status = response.status;
+    err.body = data;
+    throw err;
   }
 
   return data;
@@ -1921,6 +1977,44 @@ async function getCalendlyAvailableTimes(eventTypeUri, timezone) {
       dayPhrase: formatLocalDayPhrase(utcTime, timezone),
     };
   });
+}
+
+async function primeCalendlySlots(session, forceRefresh = false) {
+  if (session.calendlyReady && !forceRefresh) return;
+
+  if (!CALENDLY_API_KEY || !CALENDLY_EVENT_TYPE_URI) {
+    throw new Error("Calendly env vars are missing");
+  }
+
+  const slots = await getCalendlyAvailableTimes(
+    CALENDLY_EVENT_TYPE_URI,
+    session.lead.timezone
+  );
+
+  if (!Array.isArray(slots)) {
+    throw new Error("Calendly availability response was not an array");
+  }
+
+  if (!slots.length) {
+    const err = new Error("No Calendly slots available");
+    err.code = "NO_SLOTS";
+    throw err;
+  }
+
+  session.availableSlots = slots;
+  session.calendlyReady = true;
+
+  session.lead.time_option_1 = slots[0]?.localTime || "";
+  session.lead.slot_1_day_phrase = slots[0]?.dayPhrase || "today";
+
+  session.lead.time_option_2 = slots[1]?.localTime || "";
+  session.lead.slot_2_day_phrase = slots[1]?.dayPhrase || "today";
+
+  session.lead.time_option_3 = slots[2]?.localTime || "";
+  session.lead.slot_3_day_phrase = slots[2]?.dayPhrase || "tomorrow";
+
+  session.lead.time_option_4 = slots[3]?.localTime || "";
+  session.lead.slot_4_day_phrase = slots[3]?.dayPhrase || "tomorrow";
 }
 
 function buildCalendlyQuestionsAndAnswers(session) {
@@ -1988,6 +2082,24 @@ function buildCalendlyLocation(session) {
     kind: "outbound_call",
     location: safeString(session.lead.phone),
   };
+}
+
+async function ensureChosenSlotStillAvailable(session) {
+  await primeCalendlySlots(session, true);
+
+  if (!session.pendingChosenSlot?.utcTime) {
+    throw new Error("No selected Calendly slot");
+  }
+
+  const stillAvailable = session.availableSlots.some(
+    (slot) => slot.utcTime === session.pendingChosenSlot.utcTime
+  );
+
+  if (!stillAvailable) {
+    const err = new Error("Chosen slot is no longer available");
+    err.code = "SLOT_GONE";
+    throw err;
+  }
 }
 
 async function createCalendlyInvitee(session) {
@@ -2150,6 +2262,41 @@ app.get("/", (req, res) => {
   res.send("AI dialer is running.");
 });
 
+app.get("/health", (req, res) => {
+  res.json({
+    ok: true,
+    calendlyConfigured: Boolean(CALENDLY_API_KEY && CALENDLY_EVENT_TYPE_URI),
+    eventTypeUri: CALENDLY_EVENT_TYPE_URI || null,
+  });
+});
+
+app.get("/test-calendly", async (req, res) => {
+  try {
+    const timezone = req.query.timezone || DEFAULT_TIMEZONE;
+    const slots = await getCalendlyAvailableTimes(
+      CALENDLY_EVENT_TYPE_URI,
+      timezone
+    );
+
+    res.json({
+      success: true,
+      timezone,
+      eventTypeUri: CALENDLY_EVENT_TYPE_URI,
+      slotCount: slots.length,
+      slots,
+    });
+  } catch (error) {
+    console.error("Test Calendly error:", error.message);
+    res.status(500).json({
+      success: false,
+      eventTypeUri: CALENDLY_EVENT_TYPE_URI || null,
+      error: error.message,
+      body: error.body || null,
+      status: error.status || null,
+    });
+  }
+});
+
 app.post("/voice", (req, res) => {
   const host = req.headers.host;
   const leadId = req.query.leadId || "";
@@ -2276,43 +2423,6 @@ app.get("/session/:leadId", (req, res) => {
  * CALL FLOW
  * ============================================================================
  */
-
-async function primeCalendlySlots(session) {
-  if (session.calendlyReady) return;
-
-  if (!CALENDLY_API_KEY || !CALENDLY_EVENT_TYPE_URI) {
-    throw new Error("Calendly env vars are missing");
-  }
-
-  const slots = await getCalendlyAvailableTimes(
-    CALENDLY_EVENT_TYPE_URI,
-    session.lead.timezone
-  );
-
-  if (!slots.length) {
-    throw new Error("No Calendly slots available");
-  }
-
-  session.availableSlots = slots;
-  session.calendlyReady = true;
-
-  if (slots[0]) {
-    session.lead.time_option_1 = slots[0].localTime;
-    session.lead.slot_1_day_phrase = slots[0].dayPhrase;
-  }
-  if (slots[1]) {
-    session.lead.time_option_2 = slots[1].localTime;
-    session.lead.slot_2_day_phrase = slots[1].dayPhrase;
-  }
-  if (slots[2]) {
-    session.lead.time_option_3 = slots[2].localTime;
-    session.lead.slot_3_day_phrase = slots[2].dayPhrase;
-  }
-  if (slots[3]) {
-    session.lead.time_option_4 = slots[3].localTime;
-    session.lead.slot_4_day_phrase = slots[3].dayPhrase;
-  }
-}
 
 async function handleConversationStart(ws, session) {
   session.scriptStarted = false;
@@ -2932,12 +3042,26 @@ async function handleStepResponse(ws, session, callerText) {
         note(session, "booking_fallback", {
           meeting_type: session.lead.meeting_type,
           desired_step: "calendar_unavailable",
+          error: error.message,
         });
 
-        session.currentStepIndex = getStepIndexById("collect_email");
+        if (error.code === "NO_SLOTS") {
+          session.currentStepIndex = getStepIndexById("collect_email");
+          sendVoice(
+            ws,
+            "It looks like I do not have any openings showing right this second. Let me grab a good email address and we'll send over the next available time.",
+            session
+          );
+          return;
+        }
+
+        setOutcome(session, "calendar_lookup_failed");
+        session.crm.booking_status = "calendar_lookup_failed";
+        session.shouldEndCall = true;
+
         sendVoice(
           ws,
-          "It looks like the calendar is updating on my end. Let me grab a good email address and we'll send over the best available time.",
+          "I'm having trouble pulling up the calendar on my side right now. We'll reach back out once that is fixed.",
           session
         );
       }
@@ -3009,10 +3133,40 @@ async function handleStepResponse(ws, session, callerText) {
 
     case "collect_email": {
       const email = extractEmail(text);
-      session.lead.email = email || callerText;
+
+      if (!email) {
+        sendVoice(
+          ws,
+          "I'm sorry, I didn't quite catch the email. Can you say that one more time for me?",
+          session
+        );
+        return;
+      }
+
+      session.lead.email = email;
       note(session, "email_collected", session.lead.email);
 
+      if (!session.pendingChosenSlot?.utcTime) {
+        note(session, "manual_followup_email_only", {
+          email: session.lead.email,
+          reason: "no_slot_selected",
+        });
+
+        setOutcome(session, "manual_followup_needed");
+        session.crm.booking_status = "manual_followup_needed";
+
+        sendVoice(
+          ws,
+          "Perfect, I have your email. We'll send over the next available time as soon as the calendar opens up.",
+          session
+        );
+        session.shouldEndCall = true;
+        return;
+      }
+
       try {
+        await ensureChosenSlotStillAvailable(session);
+
         const booking = await createCalendlyInvitee(session);
 
         note(session, "calendly_booking", booking);
@@ -3024,6 +3178,32 @@ async function handleStepResponse(ws, session, callerText) {
         session.shouldEndCall = true;
       } catch (error) {
         console.error("Calendly booking error:", error.message);
+
+        if (error.code === "SLOT_GONE") {
+          session.calendlyReady = false;
+          session.availableSlots = [];
+          session.pendingChosenSlot = null;
+          session.lead.scheduled_time = "";
+          session.lead.scheduled_time_utc = "";
+
+          try {
+            await primeCalendlySlots(session, true);
+            session.currentStepIndex = getStepIndexById("offer_times_today");
+            sendVoice(
+              ws,
+              "That spot just got taken. Let me give you the next two openings I have.",
+              session
+            );
+            sendVoice(
+              ws,
+              renderTemplate(getCurrentStep(session).text, session.lead),
+              session
+            );
+            return;
+          } catch (reprimeError) {
+            console.error("Calendly reprime error:", reprimeError.message);
+          }
+        }
 
         note(session, "booking_manual_followup_needed", {
           email: session.lead.email,
@@ -3039,7 +3219,7 @@ async function handleStepResponse(ws, session, callerText) {
 
         sendVoice(
           ws,
-          "I have everything I need, but the calendar didn't save on my side just yet. I'll have the confirmation sent over manually so you don't lose the spot.",
+          "I have everything I need, but the appointment did not finish saving on my side. We'll follow up with the confirmation manually so you do not lose it.",
           session
         );
         session.shouldEndCall = true;
@@ -3149,12 +3329,6 @@ wss.on("connection", (ws, req) => {
           return;
         }
 
-        // Priority router:
-        // 1. do-not-call / fresh objection
-        // 2. callback capture
-        // 3. verification correction / objection flow / coverage detail
-        // 4. normal step handling
-
         const freshObjection = detectObjection(callerText);
 
         if (
@@ -3213,6 +3387,8 @@ wss.on("connection", (ws, req) => {
  * START SERVER
  * ============================================================================
  */
+
+validateEnv();
 
 const PORT = process.env.PORT || 3000;
 
