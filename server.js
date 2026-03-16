@@ -20,6 +20,9 @@ const DEFAULT_TIMEZONE = process.env.CALENDLY_TIMEZONE || "America/New_York";
 const CALENDLY_API_KEY = process.env.CALENDLY_API_KEY;
 const CALENDLY_EVENT_TYPE_URI = process.env.CALENDLY_EVENT_TYPE_URI;
 
+const SLOT_HOLD_MS = Number(process.env.SLOT_HOLD_MS || 4 * 60 * 1000);
+const SLOT_HOLD_CLEANUP_MS = Number(process.env.SLOT_HOLD_CLEANUP_MS || 30 * 1000);
+
 const client = twilio(accountSid, authToken);
 
 const app = express();
@@ -625,11 +628,12 @@ const OBJECTION_LIBRARY = [
 
 /**
  * ============================================================================
- * SESSION STORE
+ * SESSION STORE / SLOT HOLDS
  * ============================================================================
  */
 
 const callSessions = new Map();
+const slotHolds = new Map();
 
 /**
  * ============================================================================
@@ -1219,6 +1223,8 @@ function buildSessionFromLead(lead = {}) {
     calendlyReady: false,
     availableSlots: [],
     pendingChosenSlot: null,
+    pendingChosenSlotPair: "first",
+    heldSlotUtcTime: "",
     notes: [],
     createdAt: Date.now(),
 
@@ -1373,34 +1379,6 @@ function detectObjection(text) {
   return null;
 }
 
-function detectObjectionBranch(text, objection) {
-  if (!objection || !objection.branches) return null;
-
-  const t = normalizeText(text);
-
-  for (const [branchName, branch] of Object.entries(objection.branches)) {
-    for (const trigger of branch.detect) {
-      const normalizedTrigger = normalizeText(trigger);
-      if (t.includes(normalizedTrigger) || normalizedTrigger.includes(t)) {
-        return { branchName, branch };
-      }
-    }
-  }
-
-  if (
-    objection.id === "not_interested" &&
-    ((t.includes("insurance") || t.includes("policy") || t.includes("covered")) &&
-      !t.includes("not"))
-  ) {
-    return {
-      branchName: "has_coverage",
-      branch: objection.branches.has_coverage,
-    };
-  }
-
-  return null;
-}
-
 function formatObjectionResponse(lines) {
   return lines
     .map((line) => (line === "[PAUSE_3_SECONDS]" ? "..." : line))
@@ -1441,24 +1419,6 @@ function note(session, type, value) {
     value,
     at: Date.now(),
   });
-}
-
-function chooseSlotFromResponse(text, session, pair = "first") {
-  const t = normalizeText(text);
-
-  const options =
-    pair === "first"
-      ? [session.availableSlots[0], session.availableSlots[1]]
-      : [session.availableSlots[2], session.availableSlots[3]];
-
-  const [a, b] = options;
-
-  if (a && t.includes(normalizeText(a.localTime))) return a;
-  if (b && t.includes(normalizeText(b.localTime))) return b;
-  if (a && (t.includes("first") || t.includes("earlier"))) return a;
-  if (b && (t.includes("second") || t.includes("later"))) return b;
-
-  return null;
 }
 
 function sendNextPrompt(ws, session) {
@@ -1743,6 +1703,18 @@ function clearObjectionState(session) {
   session.postObjectionClarificationCount = 0;
 }
 
+function releaseHeldSlotForSession(session) {
+  cleanupExpiredSlotHolds();
+
+  if (session?.heldSlotUtcTime) {
+    const existing = slotHolds.get(session.heldSlotUtcTime);
+    if (existing && existing.sessionId === session.id) {
+      slotHolds.delete(session.heldSlotUtcTime);
+    }
+    session.heldSlotUtcTime = "";
+  }
+}
+
 function resumeAfterObjection(ws, session) {
   const returnStepId = session.objectionReturnStepId;
   const currentReturnIndex = getStepIndexById(returnStepId);
@@ -1902,6 +1874,219 @@ async function handlePostObjectionAck(ws, session, callerText) {
 
 /**
  * ============================================================================
+ * CALENDLY ERROR READER / SLOT HOLDS / SLOT DETECTION
+ * ============================================================================
+ */
+
+function cleanupExpiredSlotHolds() {
+  const now = Date.now();
+  for (const [utcTime, hold] of slotHolds.entries()) {
+    if (!hold || hold.expiresAt <= now) {
+      slotHolds.delete(utcTime);
+    }
+  }
+}
+
+function isSlotHeldByOtherSession(utcTime, session) {
+  cleanupExpiredSlotHolds();
+  const hold = slotHolds.get(utcTime);
+  if (!hold) return false;
+  return hold.sessionId !== session.id;
+}
+
+function acquireSlotHold(session, slot) {
+  cleanupExpiredSlotHolds();
+
+  if (!slot?.utcTime) return false;
+
+  const existing = slotHolds.get(slot.utcTime);
+  if (existing && existing.sessionId !== session.id && existing.expiresAt > Date.now()) {
+    return false;
+  }
+
+  releaseHeldSlotForSession(session);
+
+  slotHolds.set(slot.utcTime, {
+    sessionId: session.id,
+    leadPhone: session.lead.phone,
+    leadName: session.lead.full_name || session.lead.first_name,
+    expiresAt: Date.now() + SLOT_HOLD_MS,
+    createdAt: Date.now(),
+  });
+
+  session.heldSlotUtcTime = slot.utcTime;
+  return true;
+}
+
+function extendSlotHold(session) {
+  cleanupExpiredSlotHolds();
+
+  if (!session?.heldSlotUtcTime) return;
+  const hold = slotHolds.get(session.heldSlotUtcTime);
+  if (!hold) return;
+  if (hold.sessionId !== session.id) return;
+
+  hold.expiresAt = Date.now() + SLOT_HOLD_MS;
+  slotHolds.set(session.heldSlotUtcTime, hold);
+}
+
+function filterHeldSlotsForSession(slots, session) {
+  cleanupExpiredSlotHolds();
+  return slots.filter((slot) => !isSlotHeldByOtherSession(slot.utcTime, session));
+}
+
+function buildCalendlyErrorSummary(error) {
+  const body = error?.body || {};
+  const title = safeString(body.title || "");
+  const message = safeString(body.message || "");
+  const details = Array.isArray(body.details) ? body.details : [];
+
+  const invalidParams = details
+    .filter((d) => d?.parameter)
+    .map((d) => d.parameter);
+
+  return {
+    status: error?.status || null,
+    title,
+    message,
+    invalidParams,
+    raw: body,
+    isAuth: title.toLowerCase().includes("unauthenticated") || message.toLowerCase().includes("access token"),
+    isInvalidArgument: title.toLowerCase().includes("invalid argument"),
+  };
+}
+
+function normalizeTimeForMatching(value) {
+  return safeString(value)
+    .toLowerCase()
+    .replace(/\s+/g, "")
+    .replace(/\./g, "")
+    .replace(/o'clock/g, "")
+    .trim();
+}
+
+function slotTimeVariants(slot) {
+  const local = safeString(slot.localTime);
+  const compact = normalizeTimeForMatching(local);
+
+  const parts = local.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  const variants = new Set();
+
+  variants.add(compact);
+  variants.add(compact.replace(":00", ""));
+  variants.add(compact.replace(":", ""));
+  variants.add(compact.replace("pm", " p m").replace("am", " a m").replace(/\s+/g, ""));
+  variants.add(compact.replace(":00pm", "pm"));
+  variants.add(compact.replace(":00am", "am"));
+
+  if (parts) {
+    const hh = parts[1];
+    const mm = parts[2];
+    const ap = parts[3].toLowerCase();
+
+    variants.add(`${hh}:${mm}${ap}`);
+    variants.add(`${hh}${mm}${ap}`);
+    variants.add(`${hh} ${mm} ${ap}`.replace(/\s+/g, ""));
+    variants.add(`${hh} ${ap}`.replace(/\s+/g, ""));
+    if (mm === "00") {
+      variants.add(`${hh}${ap}`);
+      variants.add(`${hh}:00${ap}`);
+    }
+  }
+
+  return Array.from(variants);
+}
+
+function buildCandidateSlotList(session, pair = "first") {
+  const raw =
+    pair === "first"
+      ? session.availableSlots.slice(0, 2)
+      : session.availableSlots.slice(2, 4);
+
+  return filterHeldSlotsForSession(raw, session);
+}
+
+function chooseSlotFromResponse(text, session, pair = "first") {
+  const t = normalizeText(text);
+  const compact = normalizeTimeForMatching(text);
+  const options = buildCandidateSlotList(session, pair);
+  const [a, b] = options;
+
+  if (!options.length) return null;
+
+  for (const slot of options) {
+    for (const variant of slotTimeVariants(slot)) {
+      if (variant && compact.includes(variant)) {
+        return slot;
+      }
+    }
+  }
+
+  if (a && containsAny(t, ["first", "earlier", "earliest", "the first one", "the earlier one"])) {
+    return a;
+  }
+
+  if (b && containsAny(t, ["second", "later", "latest", "the second one", "the later one"])) {
+    return b;
+  }
+
+  if (a && !b && containsAny(t, ["yes", "okay", "that works", "works", "fine", "sure"])) {
+    return a;
+  }
+
+  if (a && containsAny(t, ["7 15", "715"])) {
+    if (normalizeTimeForMatching(a.localTime).includes("715")) return a;
+    if (b && normalizeTimeForMatching(b.localTime).includes("715")) return b;
+  }
+
+  if (a && containsAny(t, ["7 30", "730"])) {
+    if (normalizeTimeForMatching(a.localTime).includes("730")) return a;
+    if (b && normalizeTimeForMatching(b.localTime).includes("730")) return b;
+  }
+
+  if (a && containsAny(t, ["7 45", "745"])) {
+    if (normalizeTimeForMatching(a.localTime).includes("745")) return a;
+    if (b && normalizeTimeForMatching(b.localTime).includes("745")) return b;
+  }
+
+  if (a && containsAny(t, ["8 00", "800", "8 pm", "8"])) {
+    if (normalizeTimeForMatching(a.localTime).includes("8:00pm")) return a;
+    if (b && normalizeTimeForMatching(b.localTime).includes("8:00pm")) return b;
+  }
+
+  if (a && containsAny(t, ["8 15", "815"])) {
+    if (normalizeTimeForMatching(a.localTime).includes("815")) return a;
+    if (b && normalizeTimeForMatching(b.localTime).includes("815")) return b;
+  }
+
+  if (a && containsAny(t, ["8 30", "830"])) {
+    if (normalizeTimeForMatching(a.localTime).includes("830")) return a;
+    if (b && normalizeTimeForMatching(b.localTime).includes("830")) return b;
+  }
+
+  return null;
+}
+
+function applySessionSlots(session) {
+  const filtered = filterHeldSlotsForSession(session.availableSlots, session);
+
+  session.lead.time_option_1 = filtered[0]?.localTime || "";
+  session.lead.slot_1_day_phrase = filtered[0]?.dayPhrase || "today";
+
+  session.lead.time_option_2 = filtered[1]?.localTime || "";
+  session.lead.slot_2_day_phrase = filtered[1]?.dayPhrase || "today";
+
+  session.lead.time_option_3 = filtered[2]?.localTime || "";
+  session.lead.slot_3_day_phrase = filtered[2]?.dayPhrase || "tomorrow";
+
+  session.lead.time_option_4 = filtered[3]?.localTime || "";
+  session.lead.slot_4_day_phrase = filtered[3]?.dayPhrase || "tomorrow";
+}
+
+setInterval(cleanupExpiredSlotHolds, SLOT_HOLD_CLEANUP_MS).unref();
+
+/**
+ * ============================================================================
  * CALENDLY
  * ============================================================================
  */
@@ -1930,11 +2115,17 @@ async function calendlyFetch(path, options = {}) {
   }
 
   if (!response.ok) {
+    const summary = buildCalendlyErrorSummary({
+      status: response.status,
+      body: data,
+    });
+
     console.error("Calendly API failure", {
       path,
       method: options.method || "GET",
       status: response.status,
       response: data,
+      parsed: summary,
     });
 
     const err = new Error(
@@ -1944,6 +2135,7 @@ async function calendlyFetch(path, options = {}) {
     );
     err.status = response.status;
     err.body = data;
+    err.summary = summary;
     throw err;
   }
 
@@ -1967,7 +2159,7 @@ async function getCalendlyAvailableTimes(eventTypeUri, timezone) {
 
   const collection = Array.isArray(data.collection) ? data.collection : [];
 
-  return collection.slice(0, 6).map((slot) => {
+  return collection.slice(0, 8).map((slot) => {
     const utcTime = slot.start_time || slot.start || slot.time;
     return {
       raw: slot,
@@ -1980,7 +2172,10 @@ async function getCalendlyAvailableTimes(eventTypeUri, timezone) {
 }
 
 async function primeCalendlySlots(session, forceRefresh = false) {
-  if (session.calendlyReady && !forceRefresh) return;
+  if (session.calendlyReady && !forceRefresh) {
+    applySessionSlots(session);
+    return;
+  }
 
   if (!CALENDLY_API_KEY || !CALENDLY_EVENT_TYPE_URI) {
     throw new Error("Calendly env vars are missing");
@@ -1995,26 +2190,25 @@ async function primeCalendlySlots(session, forceRefresh = false) {
     throw new Error("Calendly availability response was not an array");
   }
 
-  if (!slots.length) {
+  const filtered = filterHeldSlotsForSession(slots, session);
+
+  if (!filtered.length) {
     const err = new Error("No Calendly slots available");
     err.code = "NO_SLOTS";
     throw err;
   }
 
-  session.availableSlots = slots;
+  session.availableSlots = filtered;
   session.calendlyReady = true;
+  applySessionSlots(session);
 
-  session.lead.time_option_1 = slots[0]?.localTime || "";
-  session.lead.slot_1_day_phrase = slots[0]?.dayPhrase || "today";
-
-  session.lead.time_option_2 = slots[1]?.localTime || "";
-  session.lead.slot_2_day_phrase = slots[1]?.dayPhrase || "today";
-
-  session.lead.time_option_3 = slots[2]?.localTime || "";
-  session.lead.slot_3_day_phrase = slots[2]?.dayPhrase || "tomorrow";
-
-  session.lead.time_option_4 = slots[3]?.localTime || "";
-  session.lead.slot_4_day_phrase = slots[3]?.dayPhrase || "tomorrow";
+  console.error("Calendly availability success", {
+    eventType: CALENDLY_EVENT_TYPE_URI,
+    timezone: session.lead.timezone,
+    totalSlots: slots.length,
+    usableSlots: filtered.length,
+    heldSlots: slotHolds.size,
+  });
 }
 
 function buildCalendlyQuestionsAndAnswers(session) {
@@ -2085,6 +2279,7 @@ function buildCalendlyLocation(session) {
 }
 
 async function ensureChosenSlotStillAvailable(session) {
+  extendSlotHold(session);
   await primeCalendlySlots(session, true);
 
   if (!session.pendingChosenSlot?.utcTime) {
@@ -2098,6 +2293,13 @@ async function ensureChosenSlotStillAvailable(session) {
   if (!stillAvailable) {
     const err = new Error("Chosen slot is no longer available");
     err.code = "SLOT_GONE";
+    throw err;
+  }
+
+  const hold = slotHolds.get(session.pendingChosenSlot.utcTime);
+  if (!hold || hold.sessionId !== session.id) {
+    const err = new Error("Chosen slot hold was lost");
+    err.code = "HOLD_LOST";
     throw err;
   }
 }
@@ -2263,10 +2465,12 @@ app.get("/", (req, res) => {
 });
 
 app.get("/health", (req, res) => {
+  cleanupExpiredSlotHolds();
   res.json({
     ok: true,
     calendlyConfigured: Boolean(CALENDLY_API_KEY && CALENDLY_EVENT_TYPE_URI),
     eventTypeUri: CALENDLY_EVENT_TYPE_URI || null,
+    holdCount: slotHolds.size,
   });
 });
 
@@ -2293,8 +2497,20 @@ app.get("/test-calendly", async (req, res) => {
       error: error.message,
       body: error.body || null,
       status: error.status || null,
+      summary: error.summary || null,
     });
   }
+});
+
+app.get("/slot-holds", (req, res) => {
+  cleanupExpiredSlotHolds();
+  res.json({
+    count: slotHolds.size,
+    holds: Array.from(slotHolds.entries()).map(([utcTime, hold]) => ({
+      utcTime,
+      ...hold,
+    })),
+  });
 });
 
 app.post("/voice", (req, res) => {
@@ -2504,6 +2720,7 @@ async function handleRelativeOrWrongParty(ws, session, callerText) {
     setOutcome(session, "deceased_lead");
     note(session, "deceased_lead", callerText);
     session.shouldEndCall = true;
+    releaseHeldSlotForSession(session);
     sendVoice(
       ws,
       "Oh wow, I'm sorry to hear that. I'll go ahead and update the file on my end. Thank you.",
@@ -2516,6 +2733,7 @@ async function handleRelativeOrWrongParty(ws, session, callerText) {
     setOutcome(session, "wrong_number");
     note(session, "wrong_number", callerText);
     session.shouldEndCall = true;
+    releaseHeldSlotForSession(session);
     sendVoice(ws, "Oh okay, sorry about that. Have a great day.", session);
     return true;
   }
@@ -2572,6 +2790,8 @@ async function handleCallbackCapture(ws, session, callerText) {
   setOutcome(session, "callback_requested");
 
   session.shouldEndCall = true;
+  releaseHeldSlotForSession(session);
+
   sendVoice(
     ws,
     `Perfect, I'll make a note for ${callbackTime}. Appreciate it.`,
@@ -2735,6 +2955,7 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
       session.shouldEndCall = true;
       clearObjectionState(session);
       setOutcome(session, "not_interested");
+      releaseHeldSlotForSession(session);
       sendVoice(
         ws,
         "Okay no worries, I'll go ahead and close out your file. Thank you for your time.",
@@ -2768,7 +2989,36 @@ async function handleCoverageTypeAnswer(ws, session, callerText) {
   }
 
   session.shouldEndCall = true;
+  releaseHeldSlotForSession(session);
   sendVoice(ws, "Okay perfect. Thank you for your time.", session);
+}
+
+async function offerFreshSlotsAfterHoldLoss(ws, session, introLine = "") {
+  releaseHeldSlotForSession(session);
+  session.calendlyReady = false;
+  session.availableSlots = [];
+  session.pendingChosenSlot = null;
+  session.lead.scheduled_time = "";
+  session.lead.scheduled_time_utc = "";
+
+  try {
+    await primeCalendlySlots(session, true);
+    session.currentStepIndex = getStepIndexById("offer_times_today");
+
+    if (introLine) {
+      sendVoice(ws, introLine, session);
+    }
+
+    sendVoice(
+      ws,
+      renderTemplate(getCurrentStep(session).text, session.lead),
+      session
+    );
+    return true;
+  } catch (reprimeError) {
+    console.error("Calendly reprime error:", reprimeError.message);
+    return false;
+  }
 }
 
 async function handleStepResponse(ws, session, callerText) {
@@ -2777,6 +3027,7 @@ async function handleStepResponse(ws, session, callerText) {
 
   if (!step) {
     session.shouldEndCall = true;
+    releaseHeldSlotForSession(session);
     sendVoice(ws, "Thank you again. Have a great day.", session);
     return;
   }
@@ -2794,6 +3045,7 @@ async function handleStepResponse(ws, session, callerText) {
     if (shouldExitObjectionLoop(session)) {
       session.shouldEndCall = true;
       setOutcome(session, "too_many_objections");
+      releaseHeldSlotForSession(session);
       sendVoice(
         ws,
         "No worries, it sounds like now may not be the best time to go over it. I'll let you go for now. Have a great day.",
@@ -2805,6 +3057,7 @@ async function handleStepResponse(ws, session, callerText) {
     if (matchedObjection.action === "end_call") {
       session.shouldEndCall = true;
       setOutcome(session, "do_not_call");
+      releaseHeldSlotForSession(session);
       sendVoice(ws, formatObjectionResponse(matchedObjection.response), session);
       return;
     }
@@ -2858,6 +3111,7 @@ async function handleStepResponse(ws, session, callerText) {
     if (shouldExitObjectionLoop(session)) {
       session.shouldEndCall = true;
       setOutcome(session, "too_many_objections");
+      releaseHeldSlotForSession(session);
       sendVoice(
         ws,
         "No worries, it sounds like now may not be the best time to go over it. I'll let you go for now. Have a great day.",
@@ -2900,6 +3154,7 @@ async function handleStepResponse(ws, session, callerText) {
       if (detectWrongPerson(text)) {
         session.shouldEndCall = true;
         setOutcome(session, "wrong_number");
+        releaseHeldSlotForSession(session);
         sendVoice(ws, "Oh okay, sorry about that. Have a great day.", session);
         return;
       }
@@ -3037,12 +3292,18 @@ async function handleStepResponse(ws, session, callerText) {
         session.currentStepIndex = getStepIndexById("offer_times_today");
         sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
       } catch (error) {
-        console.error("Calendly availability error:", error.message);
+        console.error("Calendly availability error:", {
+          message: error.message,
+          eventType: CALENDLY_EVENT_TYPE_URI,
+          timezone: session.lead.timezone,
+          summary: error.summary || null,
+        });
 
         note(session, "booking_fallback", {
           meeting_type: session.lead.meeting_type,
           desired_step: "calendar_unavailable",
           error: error.message,
+          summary: error.summary || null,
         });
 
         if (error.code === "NO_SLOTS") {
@@ -3058,6 +3319,7 @@ async function handleStepResponse(ws, session, callerText) {
         setOutcome(session, "calendar_lookup_failed");
         session.crm.booking_status = "calendar_lookup_failed";
         session.shouldEndCall = true;
+        releaseHeldSlotForSession(session);
 
         sendVoice(
           ws,
@@ -3074,6 +3336,7 @@ async function handleStepResponse(ws, session, callerText) {
         normalized.includes("not today") ||
         normalized === "no"
       ) {
+        releaseHeldSlotForSession(session);
         session.currentStepIndex = getStepIndexById("offer_times_tomorrow");
         sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
         return;
@@ -3081,11 +3344,37 @@ async function handleStepResponse(ws, session, callerText) {
 
       const chosen = chooseSlotFromResponse(text, session, "first");
       if (chosen) {
+        const held = acquireSlotHold(session, chosen);
+
+        if (!held) {
+          const recovered = await offerFreshSlotsAfterHoldLoss(
+            ws,
+            session,
+            "That spot just got grabbed a second ago. Let me give you the next openings I still have."
+          );
+          if (!recovered) {
+            session.shouldEndCall = true;
+            setOutcome(session, "booking_failed_manual_followup");
+            session.crm.booking_status = "manual_followup_needed";
+            sendVoice(
+              ws,
+              "It looks like the calendar changed on me. We'll follow up with the updated times manually.",
+              session
+            );
+          }
+          return;
+        }
+
         session.pendingChosenSlot = chosen;
+        session.pendingChosenSlotPair = "first";
         session.lead.scheduled_time = chosen.localTime;
         session.lead.scheduled_time_utc = chosen.utcTime;
 
         note(session, "slot_selected", chosen);
+        note(session, "slot_hold_acquired", {
+          utcTime: chosen.utcTime,
+          expiresInMs: SLOT_HOLD_MS,
+        });
 
         session.currentStepIndex = getStepIndexById("collect_email");
         sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
@@ -3112,11 +3401,37 @@ async function handleStepResponse(ws, session, callerText) {
     case "offer_times_tomorrow_slots": {
       const chosen = chooseSlotFromResponse(text, session, "second");
       if (chosen) {
+        const held = acquireSlotHold(session, chosen);
+
+        if (!held) {
+          const recovered = await offerFreshSlotsAfterHoldLoss(
+            ws,
+            session,
+            "That spot just got grabbed a second ago. Let me give you the next openings I still have."
+          );
+          if (!recovered) {
+            session.shouldEndCall = true;
+            setOutcome(session, "booking_failed_manual_followup");
+            session.crm.booking_status = "manual_followup_needed";
+            sendVoice(
+              ws,
+              "It looks like the calendar changed on me. We'll follow up with the updated times manually.",
+              session
+            );
+          }
+          return;
+        }
+
         session.pendingChosenSlot = chosen;
+        session.pendingChosenSlotPair = "second";
         session.lead.scheduled_time = chosen.localTime;
         session.lead.scheduled_time_utc = chosen.utcTime;
 
         note(session, "slot_selected", chosen);
+        note(session, "slot_hold_acquired", {
+          utcTime: chosen.utcTime,
+          expiresInMs: SLOT_HOLD_MS,
+        });
 
         session.currentStepIndex = getStepIndexById("collect_email");
         sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
@@ -3132,6 +3447,8 @@ async function handleStepResponse(ws, session, callerText) {
     }
 
     case "collect_email": {
+      extendSlotHold(session);
+
       const email = extractEmail(text);
 
       if (!email) {
@@ -3154,6 +3471,7 @@ async function handleStepResponse(ws, session, callerText) {
 
         setOutcome(session, "manual_followup_needed");
         session.crm.booking_status = "manual_followup_needed";
+        releaseHeldSlotForSession(session);
 
         sendVoice(
           ws,
@@ -3172,36 +3490,27 @@ async function handleStepResponse(ws, session, callerText) {
         note(session, "calendly_booking", booking);
         setOutcome(session, "booked");
         session.crm.booking_status = "booked";
+        releaseHeldSlotForSession(session);
 
         moveToNextStep(session);
         sendNextPrompt(ws, session);
         session.shouldEndCall = true;
       } catch (error) {
-        console.error("Calendly booking error:", error.message);
+        console.error("Calendly booking error:", {
+          message: error.message,
+          summary: error.summary || null,
+          slot: session.pendingChosenSlot?.utcTime || null,
+          heldSlot: session.heldSlotUtcTime || null,
+        });
 
-        if (error.code === "SLOT_GONE") {
-          session.calendlyReady = false;
-          session.availableSlots = [];
-          session.pendingChosenSlot = null;
-          session.lead.scheduled_time = "";
-          session.lead.scheduled_time_utc = "";
-
-          try {
-            await primeCalendlySlots(session, true);
-            session.currentStepIndex = getStepIndexById("offer_times_today");
-            sendVoice(
-              ws,
-              "That spot just got taken. Let me give you the next two openings I have.",
-              session
-            );
-            sendVoice(
-              ws,
-              renderTemplate(getCurrentStep(session).text, session.lead),
-              session
-            );
+        if (error.code === "SLOT_GONE" || error.code === "HOLD_LOST") {
+          const recovered = await offerFreshSlotsAfterHoldLoss(
+            ws,
+            session,
+            "That spot just got taken. Let me give you the next two openings I have."
+          );
+          if (recovered) {
             return;
-          } catch (reprimeError) {
-            console.error("Calendly reprime error:", reprimeError.message);
           }
         }
 
@@ -3212,10 +3521,12 @@ async function handleStepResponse(ws, session, callerText) {
           phone: session.lead.phone,
           meeting_type: session.lead.meeting_type,
           error: error.message,
+          summary: error.summary || null,
         });
 
         setOutcome(session, "booking_failed_manual_followup");
         session.crm.booking_status = "manual_followup_needed";
+        releaseHeldSlotForSession(session);
 
         sendVoice(
           ws,
@@ -3285,6 +3596,10 @@ wss.on("connection", (ws, req) => {
           note(session, "interruption", callerText);
         }
 
+        if (session.heldSlotUtcTime) {
+          extendSlotHold(session);
+        }
+
         session.repeatCount = 0;
 
         if (session.shouldEndCall) {
@@ -3321,6 +3636,7 @@ wss.on("connection", (ws, req) => {
         if (detectGoodbye(callerText)) {
           session.shouldEndCall = true;
           setOutcome(session, "hangup_or_goodbye");
+          releaseHeldSlotForSession(session);
           sendVoice(
             ws,
             "Alright, no problem. Have a great rest of your day.",
@@ -3365,6 +3681,7 @@ wss.on("connection", (ws, req) => {
       }
     } catch (error) {
       console.error("WebSocket error:", error);
+      releaseHeldSlotForSession(session);
       sendVoice(ws, "Sorry, something went wrong on my side.", session);
     }
   });
@@ -3373,6 +3690,8 @@ wss.on("connection", (ws, req) => {
     if (!session.crm.final_outcome) {
       session.crm.final_outcome = session.callOutcome;
     }
+
+    releaseHeldSlotForSession(session);
 
     console.log("Twilio disconnected from /conversationrelay", {
       leadId,
@@ -3394,4 +3713,7 @@ const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log("Calendly Event Type:", CALENDLY_EVENT_TYPE_URI || null);
+  console.log("Calendly API Key present:", Boolean(CALENDLY_API_KEY));
+  console.log("Slot hold length ms:", SLOT_HOLD_MS);
 });
