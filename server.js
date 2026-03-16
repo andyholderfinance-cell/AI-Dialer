@@ -40,8 +40,9 @@ Your tone must sound:
 - calm
 - slow
 - natural
-- slightly confused or mildly concerned, like you're looking at a file that needs attention
-- warm and conversational
+- warm
+- conversational
+- lightly concerned like you are looking at a file
 - never robotic
 - never polished like an announcer
 - never salesy
@@ -49,10 +50,12 @@ Your tone must sound:
 Tone rules:
 - Speak like a real person on the phone.
 - Use short natural phrasing.
-- Occasionally use filler words like "um", "uh", "let me see", "okay", or "just a second" in a light natural way.
+- Occasionally use filler words lightly like "um", "uh", "let me see", "okay", "just a second".
 - Do not overuse filler words.
 - Stay polite and relaxed.
 - Never sound pushy, aggressive, scripted, or overly excited.
+- Do not use long speeches.
+- Keep clarifications short.
 `;
 
 /**
@@ -66,31 +69,31 @@ const SCRIPT_STEPS = [
     id: "intro_1",
     type: "question",
     resume_after_objection: true,
-    text: "Hey, {{first_name}}?",
+    text: "Hey, is this {{first_name}}?",
   },
   {
     id: "intro_2",
     type: "question",
     resume_after_objection: true,
-    text: `Hey {{first_name}}, this is Josh. I'm just giving you a quick call about the mortgage protection information tied to your home loan with {{lender}}. Does that ring a bell?`,
+    text: `Hey {{first_name}}, this is ${CALLER_NAME}. I'm just giving you a quick call about the mortgage protection information tied to your home loan with {{lender}}. Does that ring a bell?`,
   },
   {
     id: "intro_3",
     type: "statement",
     resume_after_objection: true,
-    text: "Okay, it looks like back when you closed on your mortgage you filled out a request for information on the plan that would pay off your mortgage or make those monthly payments for you if you were to become sick, permanently disabled, or pass away. It's showing up as incomplete or due for a review.",
+    text: "Okay, from what I'm seeing here, the mortgage protection request tied to the home never got fully reviewed on my end.",
   },
   {
     id: "intro_4",
     type: "question",
     resume_after_objection: true,
-    text: "What they do is assign a case worker, in this case me, to get you appointed with the state underwriter so they can go over the information and see what you qualify for. Does that make sense?",
+    text: `My job is just to verify the information and get you lined up with ${UNDERWRITER_NAME} if you want to go over it. Does that make sense?`,
   },
   {
     id: "verify_intro",
     type: "statement",
     resume_after_objection: true,
-    text: "Okay perfect, I just need to verify a few things first to make sure I have the correct information on file.",
+    text: "Perfect, I just need to verify a couple things so I know I'm looking at the right file.",
   },
   {
     id: "verify_address",
@@ -99,82 +102,100 @@ const SCRIPT_STEPS = [
     text: "I have your address here as {{address}}. Is that correct?",
   },
   {
+    id: "verify_address_update",
+    type: "input",
+    resume_after_objection: true,
+    text: "Okay, what is the correct address?",
+  },
+  {
     id: "verify_loan",
     type: "question",
     resume_after_objection: true,
-    text: "Awesome, now I have the total loan amount as around {{loan_amount}}. Is that correct?",
+    text: "Got it. I also have the loan amount as around {{loan_amount}}. Is that correct?",
+  },
+  {
+    id: "verify_loan_update",
+    type: "input",
+    resume_after_objection: true,
+    text: "Okay, what is the correct loan amount roughly?",
   },
   {
     id: "verify_coborrower",
     type: "question",
     resume_after_objection: true,
-    text: "Great, I don't see a co borrower on file. Is there anyone helping you pay for the home?",
+    text: "And do you have anyone helping you with the home, like a co borrower or co owner?",
   },
   {
     id: "verify_age",
     type: "question",
     resume_after_objection: true,
-    text: "Okay, and I have your age here as {{age}} years young. Is that correct?",
+    text: "Okay, and I have your age as {{age}}. Is that still correct?",
+  },
+  {
+    id: "verify_age_update",
+    type: "input",
+    resume_after_objection: true,
+    text: "Okay, what is your current age?",
   },
   {
     id: "underwriter_intro",
     type: "statement",
     resume_after_objection: true,
-    text: `Okay, now ${UNDERWRITER_NAME} is the underwriter for your county. He will be able to explain mortgage protection to you, as well as share his license with the state of {{state}}. He'll answer any questions you may have, pull up options tailored specifically to you, and help you apply for coverage.`,
+    text: `Perfect. ${UNDERWRITER_NAME} is the underwriter for your area. He can go over the information with you, answer questions, and show you what options you may have.`,
   },
   {
     id: "virtual_meeting",
     type: "question",
     resume_after_objection: true,
-    text: "Ever since COVID we take care of families through virtual meetings. Do you prefer Zoom, or does a phone call work better for you?",
+    text: "We handle these by phone or Zoom now. Which do you prefer?",
   },
   {
     id: "calendar_check",
     type: "statement",
     resume_after_objection: false,
-    text: `Okay, give me just a moment to look at ${UNDERWRITER_NAME}'s calendar.`,
+    text: `Okay, give me just a moment while I check ${UNDERWRITER_NAME}'s calendar.`,
   },
   {
     id: "offer_times_today",
     type: "booking",
     resume_after_objection: true,
-    text: "It looks like he has availability for {{slot_1_day_phrase}} at {{time_option_1}} or {{time_option_2}}. Which works best for you?",
+    text: "It looks like he has {{slot_1_day_phrase}} at {{time_option_1}} or {{time_option_2}}. Which works better for you?",
   },
   {
     id: "offer_times_tomorrow",
     type: "booking",
     resume_after_objection: true,
-    text: "Okay no worries. Do you prefer tomorrow morning or afternoon?",
+    text: "No worries. Would tomorrow morning or afternoon be better?",
   },
   {
     id: "offer_times_tomorrow_slots",
     type: "booking",
     resume_after_objection: true,
-    text: "Okay, he has {{slot_3_day_phrase}} at {{time_option_3}} or {{time_option_4}}. Which works best for you?",
+    text: "Okay, the next openings I have are {{slot_3_day_phrase}} at {{time_option_3}} or {{time_option_4}}. Which works better?",
   },
   {
     id: "collect_email",
     type: "input",
     resume_after_objection: true,
-    text: "Okay perfect, can you spell out a good email address where I can send the appointment confirmation?",
+    text: "Perfect, what is a good email address for the appointment confirmation?",
   },
   {
     id: "confirmation",
     type: "statement",
     resume_after_objection: false,
-    text: "Amazing, that should be all I need. You are going to receive an email and a text message as a reminder for the appointment.",
+    text: "Perfect, that should be all I need. You'll get an email and a text reminder for the appointment.",
   },
   {
     id: "reminder_instruction",
     type: "statement",
     resume_after_objection: false,
-    text: `About two to four hours before the appointment, go ahead and reconfirm so ${UNDERWRITER_NAME} knows to still attend. He helps a lot of homeowners and just wants to make sure he gets to everyone.`,
+    text: `A couple hours before the appointment, just reconfirm so ${UNDERWRITER_NAME} knows you're still good to go.`,
   },
   {
     id: "closing",
     type: "statement",
     resume_after_objection: false,
-    text: `${UNDERWRITER_NAME} will call you at {{scheduled_time}} your time. It was a pleasure speaking with you, and enjoy the rest of your day.`,
+    text: `${UNDERWRITER_NAME} will call you at {{scheduled_time}} your time. Appreciate you, and enjoy the rest of your day.`,
   },
 ];
 
@@ -194,25 +215,57 @@ const OBJECTION_LIBRARY = [
       "why did you call",
       "what are you calling about",
       "what is this for",
-      "what is this even",
       "what exactly is this",
-      "what exactly is this about",
       "what is this call about",
       "what are you referring to",
       "what file",
       "what do you mean",
-      "what are you talking about here",
-      "what is this concerning",
-      "what is this supposed to be",
       "what is this in regards to",
-      "what are you even talking about",
-      "what are you talking about exactly",
       "what is this all about",
     ],
     response: [
-      "Yea, so this is about the mortgage life and disability protection file that was opened up when you closed on your home.",
+      "Yea, this is just about the mortgage protection file tied to the home.",
       "[PAUSE_3_SECONDS]",
-      "It's just showing up as incomplete or due for review.",
+      "From what I'm seeing, it never got fully reviewed on my end.",
+    ],
+  },
+  {
+    id: "how_did_you_get_my_info",
+    action: "resume_script_next_step",
+    triggers: [
+      "how did you get my information",
+      "how did you get my info",
+      "how did you get this number",
+      "how did you get my number",
+      "where did you get my number",
+      "where did you get my information",
+      "where did you get my info",
+      "how do you have my information",
+      "how do you have my number",
+      "where are you getting this from",
+    ],
+    response: [
+      "From what I'm seeing here, it was tied to the mortgage file from when the home was closed, and I'm just the case worker assigned to review it on my end.",
+    ],
+  },
+  {
+    id: "is_this_a_scam",
+    action: "resume_script_next_step",
+    triggers: [
+      "is this a scam",
+      "this sounds like a scam",
+      "are you a scam",
+      "sounds like a scam",
+      "is this legit",
+      "is this real",
+      "how do i know this is real",
+      "how do i know this is legit",
+      "you sound fake",
+      "this doesnt sound real",
+      "this doesn't sound real",
+    ],
+    response: [
+      "No, I get why you'd ask. I'm just calling about the mortgage protection file tied to the home, and my job is to verify the information and get you scheduled if you want to review it.",
     ],
   },
   {
@@ -224,34 +277,18 @@ const OBJECTION_LIBRARY = [
       "what does it cost",
       "what is the cost",
       "the cost",
-      "how much would it be",
-      "what would it cost",
       "price",
       "pricing",
       "too expensive",
       "how much",
       "what's the price",
-      "what is the price",
-      "what would it run me",
-      "what would that cost me",
-      "how expensive is it",
-      "is it expensive",
-      "what's the monthly",
-      "what is the monthly",
-      "monthly payment",
-      "monthly premium",
       "premium",
       "how much per month",
-      "what are the payments",
-      "what kind of payment",
-      "what kind of payments",
-      "how much a month",
-      "how much monthly",
-      "what would my payment be",
-      "what would the premium be",
+      "monthly premium",
+      "monthly payment",
     ],
     response: [
-      "So the state underwriter will be able to pull up some options for you, but they are based on your current age and health. My job is just to get you appointed with the underwriter so he can go over those options with you.",
+      "The underwriter would be the one to show you the options, because that depends on your age, health, and what you want in place.",
     ],
   },
   {
@@ -262,18 +299,12 @@ const OBJECTION_LIBRARY = [
       "is this required",
       "do i have to do this",
       "do i need to do this",
-      "is this something i have to have",
       "do i have to have this",
-      "is this required by law",
       "is this required for the mortgage",
-      "do i need this",
       "is this necessary",
-      "is this something i need",
-      "am i required to do this",
-      "do i have to get this",
     ],
     response: [
-      "No, not at all, I'm just reaching out to see if anyone was able to take care of getting that coverage in place for you.",
+      "No, not at all. I'm just checking whether you were able to get something in place or if you still wanted to review it.",
     ],
   },
   {
@@ -282,21 +313,14 @@ const OBJECTION_LIBRARY = [
     triggers: [
       "who do you work for",
       "who are you with",
-      "what company do you work for",
-      "who do you work with",
       "what company are you with",
-      "who is your company",
+      "what company do you work for",
       "who do you represent",
-      "what are you calling from",
       "where are you calling from",
-      "who are you working with",
-      "what firm are you with",
       "what company is this",
-      "who is this company",
-      "what organization are you with",
     ],
     response: [
-      "Yea of course, I work under the state underwriter assigned to your file. He is licensed with the state and contracted with multiple A-rated carriers. So we aren't tied to one specific company.",
+      "I work under the underwriter assigned to the file. We are not tied to just one company.",
     ],
   },
   {
@@ -306,23 +330,15 @@ const OBJECTION_LIBRARY = [
       "can you just email it to me",
       "just email it to me",
       "email it to me",
-      "can you email it",
-      "send it to me by email",
       "send me something",
-      "can you just send me something",
-      "can you send that to me",
-      "just send it to me",
+      "send it to me",
       "email me the info",
-      "send me the information",
       "can you text it to me",
-      "can you send me an email",
-      "just email me",
+      "just text me",
       "send it over",
-      "can you just text me",
-      "can you send me the details",
     ],
     response: [
-      "I wish I could, that would make my job a lot easier, but your options are based on your current age and health, as well as financial needs. That is why we book a time to go over all that with the state underwriter.",
+      "I can send the appointment details, but the actual options depend on your age, health, and what you need, which is why we set the review.",
     ],
   },
   {
@@ -331,28 +347,21 @@ const OBJECTION_LIBRARY = [
     triggers: [
       "are you trying to sell me something",
       "are you selling me insurance",
-      "are you trying to sell me insurance",
       "is this a sales call",
       "are you selling something",
-      "are you trying to sell me",
-      "is this sales",
       "is this some kind of sales call",
-      "are you calling to sell me something",
-      "are you selling life insurance",
       "are you pitching me something",
       "is this a solicitation",
-      "are you marketing something to me",
     ],
     response: [
-      "Completely understand the concern, but no, not at all. Mortgage protection is something you have to apply for. It isn't something you can just buy off the shelf.",
+      "No, I'm not trying to sell you anything. My job is just to verify the file and get you appointed with the underwriter to review your options.",
     ],
   },
   {
     id: "call_back",
-    action: "resume_script_next_step",
+    action: "callback_branch",
     triggers: [
       "can you call me back",
-      "can i call you back",
       "call me back",
       "i'll call you back",
       "call me later",
@@ -366,12 +375,10 @@ const OBJECTION_LIBRARY = [
       "this is a bad time",
       "i'm at work",
       "im at work",
-      "can you ring me back",
       "give me a call later",
-      "maybe call later",
     ],
     response: [
-      "Yea, of course. No decisions are being made on this call. It's just to find a time that you are available to speak with the underwriter.",
+      "Yea, of course. No decisions are being made on this call. I'm really just trying to find a better time for you.",
     ],
   },
   {
@@ -383,42 +390,30 @@ const OBJECTION_LIBRARY = [
       "what is your name",
       "who is this",
       "who am i speaking with",
-      "who am i talking to",
-      "what did you say your name was",
-      "say your name again",
-      "who is calling",
       "what was your name",
+      "say your name again",
       "who's this",
     ],
     response: [
-      `Of course, my name is ${CALLER_NAME}, I'm the case worker assigned to your mortgage protection file.`,
+      `Of course, this is ${CALLER_NAME}. I'm the case worker assigned to your mortgage protection file on my end.`,
     ],
   },
   {
     id: "qualify",
     action: "resume_script_next_step",
     triggers: [
-      "wondering if i'd qualify",
-      "wondering if i would qualify",
       "i don't think i'd qualify",
       "i dont think id qualify",
-      "i don't think i would qualify",
-      "i dont think i would qualify",
       "would i qualify",
       "qualify",
       "qualification",
       "would i even qualify",
       "i probably wouldn't qualify",
-      "i probably wont qualify",
-      "i don't know if i'd qualify",
-      "i dont know if id qualify",
       "not sure if i qualify",
-      "can i qualify",
       "would i be approved",
-      "i dont think i could get approved",
     ],
     response: [
-      "A lot of people feel that way initially, however the state underwriter is contracted with multiple A-rated carriers and would have no trouble finding one to qualify you.",
+      "A lot of people feel that way at first. That's exactly why the underwriter checks multiple options instead of just one.",
     ],
   },
   {
@@ -434,18 +429,12 @@ const OBJECTION_LIBRARY = [
       "i paid it off",
       "it's paid off",
       "its paid off",
-      "i sold my house",
-      "i sold my home already,
-      "i dont owe on the house",
-      "i don't owe on the house",
-      "i don't have a loan",
-      "i dont have a loan",
       "mortgage is paid off",
       "there is no mortgage",
       "i own it outright",
     ],
     response: [
-      "Okay no worries let me just update your file here. Now mortgage protection is something that follows you specifically. So in the event that you no longer have a mortgage, you would still be covered if something were to happen to you. Whether that be income replacement, or final expenses.",
+      "Okay, no worries. Let me just note that here. Even if the mortgage is paid off, some people still review personal protection options depending on what they want it for.",
     ],
   },
   {
@@ -454,23 +443,26 @@ const OBJECTION_LIBRARY = [
     triggers: [
       "i'm not interested",
       "im not interested",
-      "not interested",,
+      "not interested",
+      "im good",
       "i do not want it",
       "i dont want it",
       "don't want it",
-      "do not want it",
       "i'm all set",
       "im all set",
-      "not really interested",,
-      "leave me alone",
+      "not really interested",
+      "not for me",
+      "i'm fine",
+      "im fine",
       "i dont need it",
       "i don't need it",
       "i'm not looking for anything",
       "im not looking for anything",
+      "no thank you",
       "i'll pass",
     ],
     response: [
-      "Okay, no problem, let me just update your file. I know this was something that was important to you when you originally sent the request in. Are you unsure now because of the cost, or wondering if you'd qualify?",
+      "Okay, no problem. I just want to update the file correctly. Is that mainly because of cost, because you're not sure you'd qualify, or you just don't want to go over it?",
     ],
     branches: {
       cost_or_qualify: {
@@ -483,16 +475,11 @@ const OBJECTION_LIBRARY = [
           "qualification",
           "i don't think i'd qualify",
           "i dont think id qualify",
-          "wondering if i'd qualify",
-          "wondering if i would qualify",
           "not sure i qualify",
-          "dont think i qualify",
-          "don't think i qualify",
-          "i probably wouldnt qualify",
           "i probably wouldn't qualify",
         ],
         response: [
-          "A lot of people feel that way initially. The underwriter will be able to go over that with you and show you what options are available.",
+          "Totally fair. The underwriter would be the one to go over that with you and show what options are actually available.",
         ],
       },
       still_not_interested: {
@@ -504,16 +491,13 @@ const OBJECTION_LIBRARY = [
           "just not interested",
           "i'm good",
           "im good",
-          "leave it alone",
           "i'm okay",
           "im okay",
           "no thank you",
           "i'll pass",
-          "dont want it",
-          "don't want it",
         ],
         response: [
-          "Okay no worries, before I close out your file, do you already have something in place to offset the cost of your mortgage if something were to happen to you, or are you just not concerned about it?",
+          "Okay, no worries. Before I close the file out, do you already have something in place for the home if something were to happen to you, or are you just not concerned about it?",
         ],
       },
       has_coverage: {
@@ -543,18 +527,16 @@ const OBJECTION_LIBRARY = [
           "not concerned",
           "don't care",
           "dont care",
-          "do not care",
           "not worried about it",
           "close it out",
           "just close it out",
           "not really",
           "leave it alone",
-          "not concerned about it",
           "i dont care",
           "i don't care",
         ],
         response: [
-          "Okay no worries, I'll go ahead and close out your file. Thank you for your time.",
+          "Okay, no worries. I'll go ahead and close out your file. Thank you for your time.",
         ],
       },
     },
@@ -569,7 +551,6 @@ const OBJECTION_LIBRARY = [
       "i already have life insurance",
       "i'm already covered",
       "im already covered",
-      "i have a policy already",
       "i already have something in place",
       "i already have coverage",
       "i've already got coverage",
@@ -579,18 +560,12 @@ const OBJECTION_LIBRARY = [
       "im covered",
       "i have insurance through work",
       "i have a policy",
-      "i already have life",
       "i got life insurance",
-      "i already got life insurance",
       "i'm good on insurance",
       "im good on insurance",
-      "i have coverage already",
-      "already got a policy",
-      "i already took care of that",
-      "i have something in place",
     ],
     response: [
-      "Okay great, it makes sense as to why it says due for review. My job is just to get you appointed with the state underwriter so he can go over your policy to make sure you aren't overpaying and have all the correct benefits.",
+      "Okay great. My job is really just to get you in front of the underwriter so he can make sure what you have still fits what you need and that you're not overpaying.",
     ],
   },
   {
@@ -599,17 +574,10 @@ const OBJECTION_LIBRARY = [
     triggers: [
       "i never filled anything out",
       "i never filled that out",
-      "i never filled this out",
       "i didn't fill anything out",
       "i did not fill anything out",
-      "i didn't fill that out",
-      "i did not fill that out",
-      "i didn't fill this out",
-      "i did not fill this out",
       "i don't remember filling that out",
       "i dont remember filling that out",
-      "i don't remember filling this out",
-      "i dont remember filling this out",
       "i don't remember that",
       "i dont remember that",
       "i don't remember doing that",
@@ -618,19 +586,14 @@ const OBJECTION_LIBRARY = [
       "i dont recall filling this out",
       "i never requested that",
       "i never asked for that",
-      "i dont remember applying",
       "i don't remember applying",
+      "i dont remember applying",
       "i never applied for that",
       "i didnt apply for that",
-      "i did not apply for that",
-      "i never asked for this",
-      "i dont remember signing up for that",
-      "i didn't sign up for that",
-      "i did not sign up for that",
       "i never signed up for that",
     ],
     response: [
-      "No worries, most people don't remember. It might have been a while ago. We've been backed up due to COVID and layoffs, so we're just reaching back out to everyone we missed.",
+      "No worries, most people don't remember right away, especially if it's been a while. I'm just reaching back out to make sure the file got handled correctly.",
     ],
   },
   {
@@ -643,7 +606,6 @@ const OBJECTION_LIBRARY = [
       "don't call me again",
       "dont call me again",
       "do not call me again",
-      "i already said no to this",
       "quit calling me",
       "put me on do not call",
       "take me off the list",
@@ -652,8 +614,6 @@ const OBJECTION_LIBRARY = [
       "leave me alone",
       "take me off",
       "put me on the do not call list",
-      "don't ring me again",
-      "do not ring me again",
     ],
     response: [
       "Oh okay, sorry about that. I'll go ahead and close this out for you. Have a great day.",
@@ -684,16 +644,16 @@ function safeString(value) {
   return String(value);
 }
 
-function containsAny(text, phrases) {
-  return phrases.some((phrase) => text.includes(normalizeText(phrase)));
-}
-
 function normalizeText(text) {
   return safeString(text)
     .toLowerCase()
     .replace(/[^\w\s@.:-]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function containsAny(text, phrases) {
+  return phrases.some((phrase) => text.includes(normalizeText(phrase)));
 }
 
 function renderTemplate(text, lead) {
@@ -703,6 +663,23 @@ function renderTemplate(text, lead) {
       ? String(lead[cleanKey])
       : "";
   });
+}
+
+function pick(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function naturalAck() {
+  return pick(["Okay", "Gotcha", "Alright", "Perfect", "Okay got it"]);
+}
+
+function recenterLine() {
+  return pick([
+    "Gotcha, and just so I handle the file correctly,",
+    "No worries, and the main thing I'm checking is",
+    "Right, and the reason I'm asking is just to make sure",
+    "Okay, and I just want to make sure I'm looking at the right file here,",
+  ]);
 }
 
 function detectGoodbye(text) {
@@ -802,8 +779,6 @@ function soundsLikeCallScreening(text) {
     "say your name after the tone",
     "tell me your name",
     "tell me who is calling",
-    "who's calling and why",
-    "whos calling and why",
   ];
 
   return patterns.some((p) => t.includes(p));
@@ -826,8 +801,6 @@ function soundsLikeHumanGreeting(text) {
     "who's this",
     "whos this",
     "yo",
-    "what's up",
-    "whats up",
     "yeah this is",
     "yes this is",
   ];
@@ -854,6 +827,125 @@ function soundsLikeVoicemailGreeting(text) {
   ];
 
   return patterns.some((p) => t.includes(p));
+}
+
+function detectRepeatRequest(text) {
+  const t = normalizeText(text);
+
+  const phrases = [
+    "what was that",
+    "repeat that",
+    "can you repeat that",
+    "could you repeat that",
+    "say that again",
+    "can you say that again",
+    "could you say that again",
+    "come again",
+    "sorry what",
+    "sorry",
+    "huh",
+    "i didnt hear you",
+    "i didn't hear you",
+    "didnt catch that",
+    "didn't catch that",
+    "can you repeat",
+    "say again",
+    "what did you say",
+    "say that one more time",
+    "one more time",
+    "pardon",
+    "pardon me",
+  ];
+
+  return phrases.some(
+    (p) => t === normalizeText(p) || t.includes(normalizeText(p))
+  );
+}
+
+function detectWrongPerson(text) {
+  const t = normalizeText(text);
+
+  return containsAny(t, [
+    "wrong number",
+    "you have the wrong number",
+    "not me",
+    "not this person",
+    "you got the wrong person",
+  ]);
+}
+
+function detectRelativeAnswer(text) {
+  const t = normalizeText(text);
+
+  return containsAny(t, [
+    "this is his wife",
+    "this is her wife",
+    "this is his husband",
+    "this is her husband",
+    "this is his daughter",
+    "this is her daughter",
+    "this is his son",
+    "this is her son",
+    "this is his mom",
+    "this is her mom",
+    "this is his mother",
+    "this is her mother",
+    "this is his father",
+    "this is her father",
+    "this is his sister",
+    "this is her sister",
+    "this is his brother",
+    "this is her brother",
+    "i'm his wife",
+    "im his wife",
+    "i'm her wife",
+    "im her wife",
+    "i'm his husband",
+    "im his husband",
+    "i'm her husband",
+    "im her husband",
+    "i'm his daughter",
+    "im his daughter",
+    "i'm her daughter",
+    "im her daughter",
+    "i'm his son",
+    "im his son",
+    "i'm her son",
+    "im her son",
+  ]);
+}
+
+function detectNotAvailablePerson(text) {
+  const t = normalizeText(text);
+
+  return containsAny(t, [
+    "he's not here",
+    "hes not here",
+    "she's not here",
+    "shes not here",
+    "not available",
+    "not home",
+    "they're not here",
+    "theyre not here",
+    "not in right now",
+    "not around",
+  ]);
+}
+
+function detectDeceased(text) {
+  const t = normalizeText(text);
+
+  return containsAny(t, [
+    "he passed away",
+    "she passed away",
+    "passed away",
+    "he died",
+    "she died",
+    "deceased",
+    "no longer with us",
+    "he is deceased",
+    "she is deceased",
+  ]);
 }
 
 function inferTimezoneFromState(state) {
@@ -996,6 +1088,7 @@ function buildSessionFromLead(lead = {}) {
     coverage: lead.coverage || "",
     language: lead.language || "English",
     booked_by: lead.booked_by || CALLER_NAME,
+    lead_type: lead.lead_type || "aged", // fresh | aged | warm
   };
 
   return {
@@ -1021,6 +1114,20 @@ function buildSessionFromLead(lead = {}) {
     screeningState: "unknown",
     screeningCount: 0,
     scriptStarted: false,
+
+    lastBotMessage: "",
+    lastMeaningfulBotMessage: "",
+    lastMeaningfulBotStepId: "",
+    lastPromptAt: 0,
+
+    awaitingCallbackTime: false,
+    callbackRequested: false,
+
+    relativeAnswered: false,
+    verifyingField: null,
+
+    callOutcome: "in_progress",
+    objectionHistory: [],
   };
 }
 
@@ -1044,6 +1151,20 @@ function isQuestionLike(step) {
   return step && ["question", "input", "booking"].includes(step.type);
 }
 
+function isMeaningfulFollowupText(text) {
+  const t = normalizeText(text);
+  const tiny = [
+    "does that make sense",
+    "fair enough",
+    "okay",
+    "okay so far",
+    "you follow me",
+    "are you still there",
+    "hello",
+  ];
+  return !tiny.some((x) => t === normalizeText(x));
+}
+
 function buildPromptFromCurrentStep(session) {
   const parts = [];
   let idx = session.currentStepIndex;
@@ -1063,13 +1184,7 @@ function buildPromptFromCurrentStep(session) {
   }
 
   session.currentStepIndex = questionStepIndex;
-
   return parts.join(" ");
-}
-
-function rewindToLastQuestion(session) {
-  session.currentStepIndex =
-    session.lastQuestionStepIndex || session.currentStepIndex;
 }
 
 function extractEmail(text) {
@@ -1086,6 +1201,19 @@ function detectNo(text) {
     t.includes("not really") ||
     t.includes("that's not right") ||
     t.includes("that is not right")
+  );
+}
+
+function detectYes(text) {
+  const t = normalizeText(text);
+  return (
+    t.includes("yes") ||
+    t.includes("yeah") ||
+    t.includes("yep") ||
+    t.includes("correct") ||
+    t.includes("that's right") ||
+    t.includes("that is right") ||
+    t.includes("right")
   );
 }
 
@@ -1106,7 +1234,6 @@ function detectMorningAfternoon(text) {
 
 function detectObjection(text) {
   const t = normalizeText(text);
-
   if (!t) return null;
 
   for (const objection of OBJECTION_LIBRARY) {
@@ -1163,10 +1290,33 @@ function buildVoiceMessage(text) {
   });
 }
 
-function sendVoice(ws, text) {
+function sendVoice(ws, text, session = null, options = {}) {
+  if (session) {
+    session.lastBotMessage = text;
+
+    if (!options.isFollowupPrompt && isMeaningfulFollowupText(text)) {
+      session.lastMeaningfulBotMessage = text;
+      session.lastMeaningfulBotStepId = safeString(getCurrentStep(session)?.id);
+    }
+  }
+
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(buildVoiceMessage(text));
   }
+}
+
+function setOutcome(session, outcome) {
+  if (!session.callOutcome || session.callOutcome === "in_progress") {
+    session.callOutcome = outcome;
+  }
+}
+
+function note(session, type, value) {
+  session.notes.push({
+    type,
+    value,
+    at: Date.now(),
+  });
 }
 
 function chooseSlotFromResponse(text, session, pair = "first") {
@@ -1189,12 +1339,14 @@ function chooseSlotFromResponse(text, session, pair = "first") {
 
 function sendNextPrompt(ws, session) {
   const prompt = buildPromptFromCurrentStep(session);
-  sendVoice(ws, prompt);
+  sendVoice(ws, prompt, session);
 }
 
 function getPostObjectionModeForId(objectionId) {
   const modeMap = {
     what_is_this: "does_that_make_sense",
+    how_did_you_get_my_info: "does_that_make_sense",
+    is_this_a_scam: "does_that_make_sense",
     mandatory: "does_that_make_sense",
     are_you_selling: "does_that_make_sense",
     email_it: "does_that_make_sense",
@@ -1224,35 +1376,31 @@ function askPostObjectionFollowup(
   session.postObjectionClarificationCount = 0;
 
   if (mode === "does_that_make_sense") {
-    sendVoice(ws, "Does that make sense?");
+    sendVoice(ws, "Does that make sense?", session, { isFollowupPrompt: true });
     return;
   }
 
   if (mode === "fair_enough") {
-    sendVoice(ws, "Fair enough?");
+    sendVoice(ws, "Fair enough?", session, { isFollowupPrompt: true });
     return;
   }
 
   if (mode === "okay_so_far") {
-    sendVoice(ws, "Okay so far?");
+    sendVoice(ws, "Okay so far?", session, { isFollowupPrompt: true });
     return;
   }
 
   if (mode === "brief_ack") {
-    sendVoice(ws, "Okay?");
+    sendVoice(ws, "Okay?", session, { isFollowupPrompt: true });
     return;
   }
 
   if (mode === "you_follow_me") {
-    sendVoice(ws, "You follow me?");
+    sendVoice(ws, "You follow me?", session, { isFollowupPrompt: true });
     return;
   }
 
-  if (mode === "just_wait") {
-    return;
-  }
-
-  sendVoice(ws, "Does that make sense?");
+  sendVoice(ws, "Does that make sense?", session, { isFollowupPrompt: true });
 }
 
 function isPositiveAck(text) {
@@ -1308,8 +1456,12 @@ function getClarifyingFollowupForStep(stepId) {
   const map = {
     what_is_this:
       "It just looks like the file tied to the mortgage closing never got fully reviewed on my end.",
+    how_did_you_get_my_info:
+      "From what I'm seeing here, it was tied to the mortgage file from when the home was closed.",
+    is_this_a_scam:
+      "No, I get why you'd ask. I'm just trying to verify the file and see if you wanted to review it.",
     cost:
-      "The underwriter would be the one to show you what options are available based on your age and health.",
+      "The underwriter would be the one to show the options, since that depends on your age and health.",
     mandatory:
       "No, you do not have to get it. I'm just checking whether you were able to get something in place.",
     who_do_you_work_for:
@@ -1317,17 +1469,17 @@ function getClarifyingFollowupForStep(stepId) {
     email_it:
       "I can send the appointment details, but the actual options depend on your age, health, and what you need.",
     are_you_selling:
-      "No, this is not something you just buy off the shelf. The underwriter would go over whether you want to apply.",
+      "No, this call is just to verify the file and see if you want to review it with the underwriter.",
     call_back:
-      "This call is really just to find a time that works for you to speak with the underwriter.",
+      "This call is really just to find a better time that works for you.",
     who_are_you:
       `This is ${CALLER_NAME}, the case worker assigned to the file on my end.`,
     qualify:
       "A lot of people think that at first, which is why the underwriter checks multiple options.",
     no_mortgage:
-      "Even if the mortgage is paid off, the protection can still follow you personally depending on what you want it for.",
+      "Even if the mortgage is paid off, some people still review personal protection depending on what they want it for.",
     already_have_insurance:
-      "The review is just to make sure what you already have still fits what you need and that you are not overpaying.",
+      "The review is just to make sure what you already have still fits what you need and that you're not overpaying.",
     never_filled_anything_out:
       "A lot of people do not remember because it may have been tied to the home closing a while back.",
     unknown:
@@ -1340,12 +1492,108 @@ function getClarifyingFollowupForStep(stepId) {
   );
 }
 
+function buildShortRepeat(session) {
+  const stepId = session.lastMeaningfulBotStepId;
+
+  const byStep = {
+    intro_1: renderTemplate("Hey, is this {{first_name}}?", session.lead),
+    intro_2: renderTemplate(
+      `I'm just calling about the mortgage protection information tied to your loan with {{lender}}.`,
+      session.lead
+    ),
+    intro_3:
+      "From what I'm seeing, the mortgage protection request tied to the home never got fully reviewed on my end.",
+    intro_4: `My job is just to verify the information and get you lined up with ${UNDERWRITER_NAME} if you want to go over it.`,
+    verify_address: renderTemplate("I have your address as {{address}}. Is that correct?", session.lead),
+    verify_loan: renderTemplate("I have the loan amount as around {{loan_amount}}. Is that correct?", session.lead),
+    verify_age: renderTemplate("I have your age as {{age}}. Is that still correct?", session.lead),
+    virtual_meeting: "Do you prefer Zoom or a phone call?",
+    offer_times_today: renderTemplate(
+      "I have {{slot_1_day_phrase}} at {{time_option_1}} or {{time_option_2}}.",
+      session.lead
+    ),
+    offer_times_tomorrow_slots: renderTemplate(
+      "I have {{slot_3_day_phrase}} at {{time_option_3}} or {{time_option_4}}.",
+      session.lead
+    ),
+    collect_email: "What is a good email address for the appointment confirmation?",
+  };
+
+  return byStep[stepId] || safeString(session.lastMeaningfulBotMessage).trim();
+}
+
+async function handleRepeatRequest(ws, session) {
+  const repeatMessage = safeString(buildShortRepeat(session)).trim();
+
+  if (!repeatMessage) {
+    const currentStep = getCurrentStep(session);
+    if (currentStep) {
+      const rendered = renderTemplate(currentStep.text, session.lead);
+      sendVoice(ws, `Yea, ${rendered}`, session);
+      return true;
+    }
+
+    sendVoice(ws, "Yea, no worries.", session);
+    return true;
+  }
+
+  sendVoice(ws, `Yea, ${repeatMessage}`, session);
+  return true;
+}
+
+function detectLikelyInterruption(session) {
+  const now = Date.now();
+  const diff = now - (session.lastPromptAt || 0);
+  session.lastPromptAt = now;
+  return diff < 1800;
+}
+
+function maybeStartWithLeadType(session) {
+  const leadType = safeString(session.lead.lead_type).toLowerCase();
+
+  if (leadType === "fresh") {
+    session.currentStepIndex = getStepIndexById("intro_1");
+    return;
+  }
+
+  if (leadType === "warm") {
+    session.currentStepIndex = getStepIndexById("intro_1");
+    return;
+  }
+
+  session.currentStepIndex = getStepIndexById("intro_1");
+}
+
+function detectCallbackTime(text) {
+  const t = normalizeText(text);
+
+  if (containsAny(t, ["later today", "this afternoon", "after work"])) {
+    return "later today";
+  }
+  if (containsAny(t, ["tomorrow morning"])) {
+    return "tomorrow morning";
+  }
+  if (containsAny(t, ["tomorrow afternoon"])) {
+    return "tomorrow afternoon";
+  }
+  if (containsAny(t, ["tomorrow"])) {
+    return "tomorrow";
+  }
+  if (containsAny(t, ["this afternoon", "afternoon"])) {
+    return "this afternoon";
+  }
+  if (containsAny(t, ["this evening", "evening", "tonight"])) {
+    return "this evening";
+  }
+  if (containsAny(t, ["morning"])) {
+    return "morning";
+  }
+
+  return safeString(text).trim();
+}
+
 async function handlePostObjectionAck(ws, session, callerText) {
-  session.notes.push({
-    type: "post_objection_ack",
-    value: callerText,
-    at: Date.now(),
-  });
+  note(session, "post_objection_ack", callerText);
 
   const ackText = normalizeText(callerText);
   const currentObjectionId = session.postObjectionSourceId || "unknown";
@@ -1353,7 +1601,7 @@ async function handlePostObjectionAck(ws, session, callerText) {
 
   if (isNegativeAck(ackText)) {
     const clarification = getClarifyingFollowupForStep(currentObjectionId);
-    sendVoice(ws, clarification);
+    sendVoice(ws, clarification, session);
 
     session.postObjectionClarificationCount =
       (session.postObjectionClarificationCount || 0) + 1;
@@ -1370,31 +1618,31 @@ async function handlePostObjectionAck(ws, session, callerText) {
       }
 
       session.shouldEndCall = true;
-      sendVoice(ws, "Okay perfect. Thank you for your time.");
+      sendVoice(ws, "Okay perfect. Thank you for your time.", session);
       return;
     }
 
     if (currentMode === "fair_enough") {
-      sendVoice(ws, "Fair enough?");
+      sendVoice(ws, "Fair enough?", session, { isFollowupPrompt: true });
       return;
     }
 
     if (currentMode === "okay_so_far") {
-      sendVoice(ws, "Okay so far?");
+      sendVoice(ws, "Okay so far?", session, { isFollowupPrompt: true });
       return;
     }
 
     if (currentMode === "brief_ack") {
-      sendVoice(ws, "Okay?");
+      sendVoice(ws, "Okay?", session, { isFollowupPrompt: true });
       return;
     }
 
     if (currentMode === "you_follow_me") {
-      sendVoice(ws, "You follow me?");
+      sendVoice(ws, "You follow me?", session, { isFollowupPrompt: true });
       return;
     }
 
-    sendVoice(ws, "Does that make sense?");
+    sendVoice(ws, "Does that make sense?", session, { isFollowupPrompt: true });
     return;
   }
 
@@ -1410,7 +1658,7 @@ async function handlePostObjectionAck(ws, session, callerText) {
     }
 
     session.shouldEndCall = true;
-    sendVoice(ws, "Okay perfect. Thank you for your time.");
+    sendVoice(ws, "Okay perfect. Thank you for your time.", session);
     return;
   }
 }
@@ -1600,13 +1848,14 @@ async function getFallbackAIReply(session, callerText) {
 ${VOICE_STYLE_INSTRUCTIONS}
 
 Conversation rules:
-- You are only for brief clarification when the caller says something unexpected.
+- You are only for short clarification when the caller says something unexpected.
 - Do not continue the script on your own.
 - Do not invent new script lines.
 - Do not add new sales language.
 - Keep replies to one short sentence when possible.
 - After clarifying, gently return control back to the scripted flow.
 - Do not restate large parts of the process unless the caller directly asks.
+- Never discuss detailed coverage, pricing, underwriting, or guarantees.
 
 Current step: ${safeString(getCurrentStep(session)?.id)}
 Lead: ${JSON.stringify(session.lead)}
@@ -1652,8 +1901,6 @@ The script narrative is:
 • You are the case worker assigned to the file
 • Your job is to verify the information and get them appointed with the underwriter
 
-You may clarify confusion, but you must NOT introduce new explanations, services, or processes.
-
 Do NOT:
 • invent policies
 • invent companies
@@ -1663,22 +1910,18 @@ Do NOT:
 • create a new sales pitch
 • restart the script
 
-Your job is ONLY to briefly smooth over confusion and guide the conversation back to the script.
-
 Response rules:
 • 1 sentence preferred
 • 2 sentences maximum
-• under 25 words
+• under 22 words
 • natural human tone
 • calm and conversational
-• may start with phrases like:
-  "Um,"
+• may start with:
   "Yeah so"
-  "No worries,"
-  "I got you,"
-  "For sure,"
+  "No worries"
+  "I got you"
   "From what I'm seeing here"
-• If possible, reuse wording from the script itself.
+• end by gently recentering to the file when possible
 
 Current script step: ${safeString(currentStep?.id)}
 Script line: ${safeString(currentStep?.text)}
@@ -1770,6 +2013,7 @@ app.post("/dial", async (req, res) => {
         loan_amount: session.lead.loan_amount,
         age: session.lead.age,
         timezone: session.lead.timezone,
+        lead_type: session.lead.lead_type,
       },
     });
   } catch (error) {
@@ -1798,6 +2042,7 @@ app.get("/testdial", async (req, res) => {
       loan_amount: "$150,000",
       age: "25",
       email: process.env.TEST_DIAL_EMAIL || "",
+      lead_type: "aged",
     });
 
     callSessions.set(leadId, session);
@@ -1876,6 +2121,7 @@ async function primeCalendlySlots(session) {
 
 async function handleConversationStart(ws, session) {
   session.scriptStarted = false;
+  maybeStartWithLeadType(session);
 }
 
 async function handlePreScriptAudio(ws, session, callerText) {
@@ -1887,16 +2133,13 @@ async function handlePreScriptAudio(ws, session, callerText) {
   if (soundsLikeVoicemailGreeting(text)) {
     session.screeningState = "voicemail";
     session.shouldEndCall = true;
-
-    session.notes.push({
-      type: "voicemail_detected",
-      value: callerText,
-      at: Date.now(),
-    });
+    setOutcome(session, "voicemail");
+    note(session, "voicemail_detected", callerText);
 
     sendVoice(
       ws,
-      `Hey this is ${CALLER_NAME}, just calling regarding the mortgage protection information tied to the property. Please give me a call back when you get a chance. Thanks.`
+      `Hey this is ${CALLER_NAME}, just calling regarding the mortgage protection information tied to the property. Please give me a call back when you get a chance. Thanks.`,
+      session
     );
     return true;
   }
@@ -1904,18 +2147,14 @@ async function handlePreScriptAudio(ws, session, callerText) {
   if (soundsLikeCallScreening(text)) {
     session.screeningState = "screening";
     session.screeningCount += 1;
-
-    session.notes.push({
-      type: "call_screen_detected",
-      value: callerText,
-      at: Date.now(),
-    });
+    setOutcome(session, "screened_call");
+    note(session, "call_screen_detected", callerText);
 
     if (session.screeningCount <= 2) {
-      sendVoice(ws, `${CALLER_NAME}, calling back.`);
+      sendVoice(ws, `${CALLER_NAME}, calling back.`, session);
     } else {
       session.shouldEndCall = true;
-      sendVoice(ws, "Okay, thank you.");
+      sendVoice(ws, "Okay, thank you.", session);
     }
 
     return true;
@@ -1927,7 +2166,11 @@ async function handlePreScriptAudio(ws, session, callerText) {
     if (!session.scriptStarted) {
       session.scriptStarted = true;
       session.currentStepIndex = getStepIndexById("intro_1");
-      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+      sendVoice(
+        ws,
+        renderTemplate(getCurrentStep(session).text, session.lead),
+        session
+      );
       return true;
     }
   }
@@ -1940,15 +2183,87 @@ async function handlePreScriptAudio(ws, session, callerText) {
     session.screeningState = "human_connected";
     session.scriptStarted = true;
     session.currentStepIndex = getStepIndexById("intro_1");
-    sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+    sendVoice(
+      ws,
+      renderTemplate(getCurrentStep(session).text, session.lead),
+      session
+    );
     return true;
   }
 
   return false;
 }
 
+async function handleRelativeOrWrongParty(ws, session, callerText) {
+  if (detectDeceased(callerText)) {
+    setOutcome(session, "deceased_lead");
+    note(session, "deceased_lead", callerText);
+    session.shouldEndCall = true;
+    sendVoice(ws, "Oh wow, I'm sorry to hear that. I'll go ahead and update the file on my end. Thank you.", session);
+    return true;
+  }
+
+  if (detectWrongPerson(callerText)) {
+    setOutcome(session, "wrong_number");
+    note(session, "wrong_number", callerText);
+    session.shouldEndCall = true;
+    sendVoice(ws, "Oh okay, sorry about that. Have a great day.", session);
+    return true;
+  }
+
+  if (detectRelativeAnswer(callerText)) {
+    session.relativeAnswered = true;
+    setOutcome(session, "relative_answered");
+    note(session, "relative_answered", callerText);
+    session.awaitingCallbackTime = true;
+    sendVoice(
+      ws,
+      `Gotcha. When would be a better time for ${session.lead.first_name} to get a quick call back?`,
+      session
+    );
+    return true;
+  }
+
+  if (detectNotAvailablePerson(callerText)) {
+    session.relativeAnswered = true;
+    setOutcome(session, "person_not_available");
+    note(session, "person_not_available", callerText);
+    session.awaitingCallbackTime = true;
+    sendVoice(
+      ws,
+      `No worries. When would be a better time for ${session.lead.first_name} to get a quick call back?`,
+      session
+    );
+    return true;
+  }
+
+  return false;
+}
+
+async function handleCallbackCapture(ws, session, callerText) {
+  const callbackTime = detectCallbackTime(callerText);
+
+  session.callbackRequested = true;
+  session.awaitingCallbackTime = false;
+
+  note(session, "callback_time", callbackTime);
+  setOutcome(session, "callback_requested");
+
+  session.shouldEndCall = true;
+  sendVoice(
+    ws,
+    `Perfect, I'll make a note for ${callbackTime}. Appreciate it.`,
+    session
+  );
+}
+
 async function handleActiveObjectionBranch(ws, session, callerText) {
   const activeId = session.activeObjection;
+
+  if (activeId === "callback_request") {
+    await handleCallbackCapture(ws, session, callerText);
+    return;
+  }
 
   if (activeId === "not_interested") {
     const t = normalizeText(callerText);
@@ -1974,12 +2289,14 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
     ) {
       sendVoice(
         ws,
-        "A lot of people feel that way initially. The underwriter will be able to go over that with you and show you what options are available."
+        "A lot of people feel that way initially. The underwriter will be able to go over that with you and show you what options are available.",
+        session
       );
       session.activeObjection = "not_interested_coverage_check";
       sendVoice(
         ws,
-        "Okay no worries, before I close out your file, do you already have something in place to offset the cost of your mortgage if something were to happen to you, or are you just not concerned about it?"
+        "Okay, no worries. Before I close out the file, do you already have something in place for the home if something were to happen to you, or are you just not concerned about it?",
+        session
       );
       return;
     }
@@ -2005,14 +2322,16 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
       session.activeObjection = "not_interested_coverage_check";
       sendVoice(
         ws,
-        "Okay no worries, before I close out your file, do you already have something in place to offset the cost of your mortgage if something were to happen to you, or are you just not concerned about it?"
+        "Okay, no worries. Before I close out the file, do you already have something in place for the home if something were to happen to you, or are you just not concerned about it?",
+        session
       );
       return;
     }
 
     sendVoice(
       ws,
-      "Just so I handle this correctly, are you unsure because of the cost, wondering if you'd qualify, or are you just not interested in going over it?"
+      "Just so I update it correctly, is it more the cost, the qualifying part, or you just don't want to go over it?",
+      session
     );
     return;
   }
@@ -2042,9 +2361,12 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
       session.waitingForObjectionBranch = false;
       session.activeObjection = null;
       session.waitingForCoverageTypeAnswer = true;
+      note(session, "has_existing_coverage", callerText);
+
       sendVoice(
         ws,
-        "Okay great, and is that a personal life policy, or something specifically for the mortgage?"
+        "Okay great, and is that a personal life policy, or something specifically for the mortgage?",
+        session
       );
       return;
     }
@@ -2065,16 +2387,19 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
       session.shouldEndCall = true;
       session.waitingForObjectionBranch = false;
       session.activeObjection = null;
+      setOutcome(session, "not_interested");
       sendVoice(
         ws,
-        "Okay no worries, I'll go ahead and close out your file, thank you for your time."
+        "Okay no worries, I'll go ahead and close out your file. Thank you for your time.",
+        session
       );
       return;
     }
 
     sendVoice(
       ws,
-      "Just so I update it correctly, do you already have something in place, or are you just not concerned about it?"
+      "Just so I update it correctly, do you already have something in place, or are you just not concerned about it?",
+      session
     );
     return;
   }
@@ -2095,7 +2420,8 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
   if (!branchMatch) {
     sendVoice(
       ws,
-      "Just so I handle this correctly, do you already have something in place, or are you not concerned about it?"
+      "Just so I handle this correctly, do you already have something in place, or are you not concerned about it?",
+      session
     );
     return;
   }
@@ -2106,7 +2432,8 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
     session.waitingForObjectionBranch = false;
     session.activeObjection = null;
     session.waitingForCoverageTypeAnswer = true;
-    sendVoice(ws, formatObjectionResponse(branch.response));
+    note(session, "has_existing_coverage", callerText);
+    sendVoice(ws, formatObjectionResponse(branch.response), session);
     return;
   }
 
@@ -2114,17 +2441,14 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
     session.shouldEndCall = true;
     session.waitingForObjectionBranch = false;
     session.activeObjection = null;
-    sendVoice(ws, formatObjectionResponse(branch.response));
+    setOutcome(session, "not_interested");
+    sendVoice(ws, formatObjectionResponse(branch.response), session);
     return;
   }
 }
 
 async function handleCoverageTypeAnswer(ws, session, callerText) {
-  session.notes.push({
-    type: "coverage_type_answer",
-    value: callerText,
-    at: Date.now(),
-  });
+  note(session, "coverage_type_answer", callerText);
 
   session.lead.policy_review = "Yes";
   session.lead.coverage = callerText;
@@ -2137,7 +2461,7 @@ async function handleCoverageTypeAnswer(ws, session, callerText) {
   }
 
   session.shouldEndCall = true;
-  sendVoice(ws, "Okay perfect. Thank you for your time.");
+  sendVoice(ws, "Okay perfect. Thank you for your time.", session);
 }
 
 async function handleStepResponse(ws, session, callerText) {
@@ -2146,23 +2470,43 @@ async function handleStepResponse(ws, session, callerText) {
 
   if (!step) {
     session.shouldEndCall = true;
-    sendVoice(ws, "Thank you again. Have a great day.");
+    sendVoice(ws, "Thank you again. Have a great day.", session);
     return;
   }
 
   const text = safeString(callerText);
   const normalized = normalizeText(text);
 
+  const relativeHandled = await handleRelativeOrWrongParty(ws, session, callerText);
+  if (relativeHandled) return;
+
   const matchedObjection = detectObjection(text);
   if (matchedObjection) {
+    session.objectionHistory.push(matchedObjection.id);
+    note(session, "objection", matchedObjection.id);
+
     if (matchedObjection.action === "end_call") {
       session.shouldEndCall = true;
-      sendVoice(ws, formatObjectionResponse(matchedObjection.response));
+      setOutcome(session, "do_not_call");
+      sendVoice(ws, formatObjectionResponse(matchedObjection.response), session);
+      return;
+    }
+
+    if (matchedObjection.action === "callback_branch") {
+      sendVoice(ws, formatObjectionResponse(matchedObjection.response), session);
+      session.activeObjection = "callback_request";
+      session.waitingForObjectionBranch = true;
+      session.awaitingCallbackTime = true;
+      sendVoice(
+        ws,
+        "What works better for you, later today or tomorrow?",
+        session
+      );
       return;
     }
 
     if (matchedObjection.action === "resume_script_next_step") {
-      sendVoice(ws, formatObjectionResponse(matchedObjection.response));
+      sendVoice(ws, formatObjectionResponse(matchedObjection.response), session);
       const postMode = getPostObjectionModeForId(matchedObjection.id);
       askPostObjectionFollowup(ws, session, postMode, matchedObjection.id);
       return;
@@ -2171,16 +2515,19 @@ async function handleStepResponse(ws, session, callerText) {
     if (matchedObjection.action === "branch_followup") {
       session.activeObjection = matchedObjection.id;
       session.waitingForObjectionBranch = true;
-      sendVoice(ws, formatObjectionResponse(matchedObjection.response));
+      sendVoice(ws, formatObjectionResponse(matchedObjection.response), session);
       return;
     }
   }
 
   if (detectPossibleUnknownObjection(text)) {
     const freestyleReply = await getUnknownObjectionReply(session, callerText);
-    sendVoice(ws, freestyleReply);
-    const postMode = getPostObjectionModeForId("unknown");
-    askPostObjectionFollowup(ws, session, postMode, "unknown");
+    sendVoice(ws, freestyleReply, session);
+    sendVoice(
+      ws,
+      `${recenterLine()} the right file here.`,
+      session
+    );
     return;
   }
 
@@ -2205,28 +2552,19 @@ async function handleStepResponse(ws, session, callerText) {
         ])
       ) {
         session.currentStepIndex = getStepIndexById("intro_2");
-        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
         return;
       }
 
-      if (
-        containsAny(t, [
-          "wrong number",
-          "you have the wrong number",
-          "not here",
-          "not available",
-          "he's not here",
-          "she's not here",
-          "not me",
-        ])
-      ) {
+      if (detectWrongPerson(text)) {
         session.shouldEndCall = true;
-        sendVoice(ws, "Oh okay, sorry about that. Have a great day.");
+        setOutcome(session, "wrong_number");
+        sendVoice(ws, "Oh okay, sorry about that. Have a great day.", session);
         return;
       }
 
       session.currentStepIndex = getStepIndexById("intro_2");
-      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
       return;
     }
 
@@ -2244,48 +2582,92 @@ async function handleStepResponse(ws, session, callerText) {
 
     case "verify_address": {
       if (detectNo(text)) {
-        session.notes.push({
-          type: "address_mismatch",
-          value: callerText,
-          at: Date.now(),
-        });
+        session.verifyingField = "address";
+        note(session, "address_mismatch", callerText);
+        session.currentStepIndex = getStepIndexById("verify_address_update");
+        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+        return;
       }
 
       session.currentStepIndex = getStepIndexById("verify_loan");
-      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+      return;
+    }
+
+    case "verify_address_update": {
+      session.lead.address = callerText;
+      note(session, "address_updated", callerText);
+      session.verifyingField = null;
+
+      session.currentStepIndex = getStepIndexById("verify_loan");
+      sendVoice(
+        ws,
+        `${naturalAck()}. ${renderTemplate(getCurrentStep(session).text, session.lead)}`,
+        session
+      );
       return;
     }
 
     case "verify_loan": {
       if (detectNo(text)) {
-        session.notes.push({
-          type: "loan_mismatch",
-          value: callerText,
-          at: Date.now(),
-        });
+        session.verifyingField = "loan_amount";
+        note(session, "loan_mismatch", callerText);
+        session.currentStepIndex = getStepIndexById("verify_loan_update");
+        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+        return;
       }
 
       session.currentStepIndex = getStepIndexById("verify_coborrower");
-      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+      return;
+    }
+
+    case "verify_loan_update": {
+      session.lead.loan_amount = callerText;
+      note(session, "loan_amount_updated", callerText);
+      session.verifyingField = null;
+
+      session.currentStepIndex = getStepIndexById("verify_coborrower");
+      sendVoice(
+        ws,
+        `${naturalAck()}. ${renderTemplate(getCurrentStep(session).text, session.lead)}`,
+        session
+      );
       return;
     }
 
     case "verify_coborrower": {
-      session.lead.co_borrower = normalized.includes("no") ? "No" : callerText;
+      if (containsAny(normalized, ["no", "nobody", "no one", "just me"])) {
+        session.lead.co_borrower = "No";
+      } else {
+        session.lead.co_borrower = callerText;
+      }
+
+      note(session, "co_borrower_answer", session.lead.co_borrower);
 
       session.currentStepIndex = getStepIndexById("verify_age");
-      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
       return;
     }
 
     case "verify_age": {
       if (detectNo(text)) {
-        session.notes.push({
-          type: "age_mismatch",
-          value: callerText,
-          at: Date.now(),
-        });
+        session.verifyingField = "age";
+        note(session, "age_mismatch", callerText);
+        session.currentStepIndex = getStepIndexById("verify_age_update");
+        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+        return;
       }
+
+      session.currentStepIndex = getStepIndexById("underwriter_intro");
+      sendNextPrompt(ws, session);
+      return;
+    }
+
+    case "verify_age_update": {
+      session.lead.age = callerText;
+      note(session, "age_updated", callerText);
+      session.verifyingField = null;
 
       session.currentStepIndex = getStepIndexById("underwriter_intro");
       sendNextPrompt(ws, session);
@@ -2294,19 +2676,28 @@ async function handleStepResponse(ws, session, callerText) {
 
     case "virtual_meeting": {
       session.lead.meeting_type = detectZoomPreference(text) || "Phone";
+      note(session, "meeting_type", session.lead.meeting_type);
+
       session.currentStepIndex = getStepIndexById("calendar_check");
-      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
 
       try {
         await primeCalendlySlots(session);
         session.currentStepIndex = getStepIndexById("offer_times_today");
-        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
       } catch (error) {
         console.error("Calendly availability error:", error.message);
+
+        note(session, "booking_fallback", {
+          meeting_type: session.lead.meeting_type,
+          desired_step: "calendar_unavailable",
+        });
+
         session.currentStepIndex = getStepIndexById("collect_email");
         sendVoice(
           ws,
-          "It looks like the calendar is updating on my end. Let me grab a good email address and we'll send over the best available time."
+          "It looks like the calendar is updating on my end. Let me grab a good email address and we'll send over the best available time.",
+          session
         );
       }
       return;
@@ -2319,7 +2710,7 @@ async function handleStepResponse(ws, session, callerText) {
         normalized === "no"
       ) {
         session.currentStepIndex = getStepIndexById("offer_times_tomorrow");
-        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
         return;
       }
 
@@ -2328,28 +2719,28 @@ async function handleStepResponse(ws, session, callerText) {
         session.pendingChosenSlot = chosen;
         session.lead.scheduled_time = chosen.localTime;
         session.lead.scheduled_time_utc = chosen.utcTime;
+
+        note(session, "slot_selected", chosen);
+
         session.currentStepIndex = getStepIndexById("collect_email");
-        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
         return;
       }
 
       sendVoice(
         ws,
-        `No problem. I have ${session.lead.slot_1_day_phrase} at ${session.lead.time_option_1} or ${session.lead.time_option_2}. Which works better for you?`
+        `No problem. I have ${session.lead.slot_1_day_phrase} at ${session.lead.time_option_1} or ${session.lead.time_option_2}. Which works better for you?`,
+        session
       );
       return;
     }
 
     case "offer_times_tomorrow": {
       const pref = detectMorningAfternoon(text);
-      session.notes.push({
-        type: "tomorrow_preference",
-        value: pref || callerText,
-        at: Date.now(),
-      });
+      note(session, "tomorrow_preference", pref || callerText);
 
       session.currentStepIndex = getStepIndexById("offer_times_tomorrow_slots");
-      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
       return;
     }
 
@@ -2359,14 +2750,18 @@ async function handleStepResponse(ws, session, callerText) {
         session.pendingChosenSlot = chosen;
         session.lead.scheduled_time = chosen.localTime;
         session.lead.scheduled_time_utc = chosen.utcTime;
+
+        note(session, "slot_selected", chosen);
+
         session.currentStepIndex = getStepIndexById("collect_email");
-        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
         return;
       }
 
       sendVoice(
         ws,
-        `The next two times I have are ${session.lead.slot_3_day_phrase} at ${session.lead.time_option_3} or ${session.lead.time_option_4}. Which works better for you?`
+        `The next two times I have are ${session.lead.slot_3_day_phrase} at ${session.lead.time_option_3} or ${session.lead.time_option_4}. Which works better for you?`,
+        session
       );
       return;
     }
@@ -2374,15 +2769,13 @@ async function handleStepResponse(ws, session, callerText) {
     case "collect_email": {
       const email = extractEmail(text);
       session.lead.email = email || callerText;
+      note(session, "email_collected", session.lead.email);
 
       try {
         const booking = await createCalendlyInvitee(session);
 
-        session.notes.push({
-          type: "calendly_booking",
-          value: booking,
-          at: Date.now(),
-        });
+        note(session, "calendly_booking", booking);
+        setOutcome(session, "booked");
 
         moveToNextStep(session);
         sendNextPrompt(ws, session);
@@ -2390,9 +2783,21 @@ async function handleStepResponse(ws, session, callerText) {
       } catch (error) {
         console.error("Calendly booking error:", error.message);
 
+        note(session, "booking_manual_followup_needed", {
+          email: session.lead.email,
+          scheduled_time: session.lead.scheduled_time,
+          scheduled_time_utc: session.lead.scheduled_time_utc,
+          phone: session.lead.phone,
+          meeting_type: session.lead.meeting_type,
+          error: error.message,
+        });
+
+        setOutcome(session, "booking_failed_manual_followup");
+
         sendVoice(
           ws,
-          "I have everything I need, but the calendar didn't save on my side just yet. I'll have the confirmation sent over manually so you don't lose the spot."
+          "I have everything I need, but the calendar didn't save on my side just yet. I'll have the confirmation sent over manually so you don't lose the spot.",
+          session
         );
         session.shouldEndCall = true;
       }
@@ -2401,11 +2806,11 @@ async function handleStepResponse(ws, session, callerText) {
 
     default: {
       const fallback = await getFallbackAIReply(session, callerText);
-      sendVoice(ws, fallback);
+      sendVoice(ws, fallback, session);
 
       const currentStep = getCurrentStep(session);
       if (currentStep && isQuestionLike(currentStep)) {
-        sendVoice(ws, renderTemplate(currentStep.text, session.lead));
+        sendVoice(ws, renderTemplate(currentStep.text, session.lead), session);
       }
 
       return;
@@ -2452,8 +2857,15 @@ wss.on("connection", (ws, req) => {
         const callerText = data.voicePrompt;
         console.log("Caller said:", callerText);
 
+        const interrupted = detectLikelyInterruption(session);
+        if (interrupted) {
+          note(session, "interruption", callerText);
+        }
+
         if (session.shouldEndCall) {
-          sendVoice(ws, "Thank you. Goodbye.");
+          sendVoice(ws, "Thank you. Goodbye.", session, {
+            isFollowupPrompt: true,
+          });
           return;
         }
 
@@ -2469,9 +2881,20 @@ wss.on("connection", (ws, req) => {
           }
         }
 
+        if (detectRepeatRequest(callerText)) {
+          await handleRepeatRequest(ws, session);
+          return;
+        }
+
         if (detectGoodbye(callerText)) {
           session.shouldEndCall = true;
-          sendVoice(ws, "Alright, no problem. Have a great rest of your day.");
+          setOutcome(session, "hangup_or_goodbye");
+          sendVoice(ws, "Alright, no problem. Have a great rest of your day.", session);
+          return;
+        }
+
+        if (session.awaitingCallbackTime) {
+          await handleCallbackCapture(ws, session, callerText);
           return;
         }
 
@@ -2494,7 +2917,7 @@ wss.on("connection", (ws, req) => {
       }
     } catch (error) {
       console.error("WebSocket error:", error);
-      sendVoice(ws, "Sorry, something went wrong on my side.");
+      sendVoice(ws, "Sorry, something went wrong on my side.", session);
     }
   });
 
@@ -2502,6 +2925,7 @@ wss.on("connection", (ws, req) => {
     console.log("Twilio disconnected from /conversationrelay", {
       leadId,
       sessionId: session.id,
+      outcome: session.callOutcome,
     });
   });
 });
