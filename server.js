@@ -68,12 +68,12 @@ const SCRIPT_STEPS = [
   {
     id: "intro_1",
     type: "question",
-    text: "Hey, is this {{first_name}}?",
+    text: "Hey, {{first_name}}?",
   },
   {
     id: "intro_2",
     type: "question",
-    text: `Hey {{first_name}}, this is ${CALLER_NAME}. I'm just giving you a quick call about the mortgage protection information tied to your home loan with {{lender}}. Does that ring a bell?`,
+    text: `Hey {{first_name}}, this is ${CALLER_NAME}. I'm just giving you a quick call about the mortgage protection information tied to your home loan with {{lender}}... Does that ring a bell?`,
   },
   {
     id: "intro_3",
@@ -83,7 +83,7 @@ const SCRIPT_STEPS = [
   {
     id: "intro_4",
     type: "question",
-    text: `My job is just to verify the information and get you lined up with ${UNDERWRITER_NAME} if you want to go over it. Does that make sense?`,
+    text: `My job is just to verify the information and get you appointed with the state underwriter, ${UNDERWRITER_NAME}, so he can go over your options. Does that make sense?`,
   },
   {
     id: "verify_intro",
@@ -128,12 +128,12 @@ const SCRIPT_STEPS = [
   {
     id: "underwriter_intro",
     type: "statement",
-    text: `Perfect. ${UNDERWRITER_NAME} is the underwriter for your area. He can go over the information with you, answer questions, and show you what options you may have.`,
+    text: `Perfect. So, ${UNDERWRITER_NAME} is the underwriter for your county. He can go over the information with you, answer questions, and show you what options you may have.`,
   },
   {
     id: "virtual_meeting",
     type: "question",
-    text: "We handle these by phone or Zoom now. Which do you prefer?",
+    text: "Ever since covied, we handle appointments by phone or Zoom. Which do you prefer?",
   },
   {
     id: "calendar_check",
