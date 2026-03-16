@@ -78,7 +78,7 @@ const SCRIPT_STEPS = [
   {
     id: "intro_3",
     type: "statement",
-    text: "Okay, from what I'm seeing here, it was a request for information on the plan that would pay of your mortgage, or make those monthly payments for you if you were to become sick, disabled, or passed away. i'ts just showing up as incomplete or due for review.",
+    text: "Okay, from what I'm seeing here, it was a request for information on the plan that would pay of your mortgage, or make those monthly payments for you if you were to become sick, disabled, or passed away. Its just showing up as incomplete or due for review.",
   },
   {
     id: "intro_4",
@@ -128,12 +128,12 @@ const SCRIPT_STEPS = [
   {
     id: "underwriter_intro",
     type: "statement",
-    text: `Perfect. So, ${UNDERWRITER_NAME} is the underwriter for your county. He can go over the information with you, answer questions, and show you what options you may have.`,
+    text: `Perfect. So, ${UNDERWRITER_NAME} is the underwriter for your county. He can go over the mortgage protection information with you, answer any questions, and pull up some options based on your needs.`,
   },
   {
     id: "virtual_meeting",
     type: "question",
-    text: "Ever since covied, we handle appointments by phone or Zoom. Which do you prefer?",
+    text: "Ever since covid, we handle appointments by phone or Zoom. Which do you prefer?",
   },
   {
     id: "calendar_check",
