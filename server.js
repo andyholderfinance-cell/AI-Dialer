@@ -78,7 +78,7 @@ const SCRIPT_STEPS = [
   {
     id: "intro_3",
     type: "statement",
-    text: "Okay, from what I'm seeing here, it was a request for information on the plan that would pay of your mortgage, or make those monthly payments for you if you were to become sick, disabled, or passed away. Its just showing up as incomplete or due for review.",
+    text: "Okay, from what I'm seeing here, it was a request for information on the plan that would pay off your mortgage, or make those monthly payments for you if you were to become sick, disabled, or passed away. Its just showing up as incomplete or due for review.",
   },
   {
     id: "intro_4",
