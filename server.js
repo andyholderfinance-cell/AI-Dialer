@@ -78,7 +78,7 @@ const SCRIPT_STEPS = [
   {
     id: "intro_3",
     type: "statement",
-    text: "Okay, from what I'm seeing here, the mortgage protection request tied to the home never got fully reviewed on my end.",
+    text: "Okay, from what I'm seeing here, it was a request for information on the plan that would pay of your mortgage, or make those monthly payemts for you if you were to become sick, disabled, or passed away. I'ts just showing up as incomplete or due for review.",
   },
   {
     id: "intro_4",
