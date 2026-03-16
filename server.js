@@ -941,6 +941,10 @@ function buildSessionFromLead(lead = {}) {
     activeObjection: null,
     waitingForObjectionBranch: false,
     waitingForCoverageTypeAnswer: false,
+    waitingForPostObjectionAck: false,
+    postObjectionMode: null,
+    postObjectionSourceId: null,
+    postObjectionClarificationCount: 0,
     shouldEndCall: false,
     calendlyReady: false,
     availableSlots: [],
@@ -1116,6 +1120,229 @@ function chooseSlotFromResponse(text, session, pair = "first") {
 function sendNextPrompt(ws, session) {
   const prompt = buildPromptFromCurrentStep(session);
   sendVoice(ws, prompt);
+}
+
+function getPostObjectionModeForId(objectionId) {
+  const modeMap = {
+    what_is_this: "does_that_make_sense",
+    mandatory: "does_that_make_sense",
+    are_you_selling: "does_that_make_sense",
+    email_it: "does_that_make_sense",
+    who_do_you_work_for: "does_that_make_sense",
+    qualify: "does_that_make_sense",
+    no_mortgage: "does_that_make_sense",
+    already_have_insurance: "fair_enough",
+    never_filled_anything_out: "does_that_make_sense",
+    cost: "fair_enough",
+    call_back: "okay_so_far",
+    who_are_you: "brief_ack",
+    unknown: "does_that_make_sense",
+  };
+
+  return modeMap[objectionId] || "does_that_make_sense";
+}
+
+function askPostObjectionFollowup(
+  ws,
+  session,
+  mode = "does_that_make_sense",
+  sourceId = null
+) {
+  session.waitingForPostObjectionAck = true;
+  session.postObjectionMode = mode;
+  session.postObjectionSourceId = sourceId;
+  session.postObjectionClarificationCount = 0;
+
+  if (mode === "does_that_make_sense") {
+    sendVoice(ws, "Does that make sense?");
+    return;
+  }
+
+  if (mode === "fair_enough") {
+    sendVoice(ws, "Fair enough?");
+    return;
+  }
+
+  if (mode === "okay_so_far") {
+    sendVoice(ws, "Okay so far?");
+    return;
+  }
+
+  if (mode === "brief_ack") {
+    sendVoice(ws, "Okay?");
+    return;
+  }
+
+  if (mode === "you_follow_me") {
+    sendVoice(ws, "You follow me?");
+    return;
+  }
+
+  if (mode === "just_wait") {
+    return;
+  }
+
+  sendVoice(ws, "Does that make sense?");
+}
+
+function isPositiveAck(text) {
+  const t = normalizeText(text);
+
+  return containsAny(t, [
+    "yes",
+    "yeah",
+    "yep",
+    "okay",
+    "ok",
+    "got it",
+    "i got it",
+    "makes sense",
+    "that makes sense",
+    "understood",
+    "alright",
+    "all right",
+    "sure",
+    "uh huh",
+    "right",
+    "correct",
+    "fine",
+    "fair enough",
+  ]);
+}
+
+function isNegativeAck(text) {
+  const t = normalizeText(text);
+
+  return containsAny(t, [
+    "no",
+    "nope",
+    "not really",
+    "i dont understand",
+    "i don't understand",
+    "still confused",
+    "confused",
+    "doesnt make sense",
+    "doesn't make sense",
+    "not sure",
+    "what do you mean",
+    "huh",
+    "i'm confused",
+    "im confused",
+    "not following",
+    "i dont follow",
+    "i don't follow",
+  ]);
+}
+
+function getClarifyingFollowupForStep(stepId) {
+  const map = {
+    what_is_this:
+      "It just looks like the file tied to the mortgage closing never got fully reviewed on my end.",
+    cost:
+      "The underwriter would be the one to show you what options are available based on your age and health.",
+    mandatory:
+      "No, you do not have to get it. I'm just checking whether you were able to get something in place.",
+    who_do_you_work_for:
+      "I work under the underwriter assigned to the file, so we are not tied to just one company.",
+    email_it:
+      "I can send the appointment details, but the actual options depend on your age, health, and what you need.",
+    are_you_selling:
+      "No, this is not something you just buy off the shelf. The underwriter would go over whether you want to apply.",
+    call_back:
+      "This call is really just to find a time that works for you to speak with the underwriter.",
+    who_are_you:
+      `This is ${CALLER_NAME}, the case worker assigned to the file on my end.`,
+    qualify:
+      "A lot of people think that at first, which is why the underwriter checks multiple options.",
+    no_mortgage:
+      "Even if the mortgage is paid off, the protection can still follow you personally depending on what you want it for.",
+    already_have_insurance:
+      "The review is just to make sure what you already have still fits what you need and that you are not overpaying.",
+    never_filled_anything_out:
+      "A lot of people do not remember because it may have been tied to the home closing a while back.",
+    unknown:
+      "I'm just trying to make sure I'm looking at the right file and explaining it clearly on my end.",
+  };
+
+  return (
+    map[stepId] ||
+    "I'm just trying to make sure I'm looking at the right file and explaining it clearly on my end."
+  );
+}
+
+async function handlePostObjectionAck(ws, session, callerText) {
+  session.notes.push({
+    type: "post_objection_ack",
+    value: callerText,
+    at: Date.now(),
+  });
+
+  const ackText = normalizeText(callerText);
+  const currentObjectionId = session.postObjectionSourceId || "unknown";
+  const currentMode = session.postObjectionMode || "does_that_make_sense";
+
+  if (isNegativeAck(ackText)) {
+    const clarification = getClarifyingFollowupForStep(currentObjectionId);
+    sendVoice(ws, clarification);
+
+    session.postObjectionClarificationCount =
+      (session.postObjectionClarificationCount || 0) + 1;
+
+    if (session.postObjectionClarificationCount >= 2) {
+      session.waitingForPostObjectionAck = false;
+      session.postObjectionMode = null;
+      session.postObjectionSourceId = null;
+      session.postObjectionClarificationCount = 0;
+
+      if (moveToNextStep(session)) {
+        sendNextPrompt(ws, session);
+        return;
+      }
+
+      session.shouldEndCall = true;
+      sendVoice(ws, "Okay perfect. Thank you for your time.");
+      return;
+    }
+
+    if (currentMode === "fair_enough") {
+      sendVoice(ws, "Fair enough?");
+      return;
+    }
+
+    if (currentMode === "okay_so_far") {
+      sendVoice(ws, "Okay so far?");
+      return;
+    }
+
+    if (currentMode === "brief_ack") {
+      sendVoice(ws, "Okay?");
+      return;
+    }
+
+    if (currentMode === "you_follow_me") {
+      sendVoice(ws, "You follow me?");
+      return;
+    }
+
+    sendVoice(ws, "Does that make sense?");
+    return;
+  }
+
+  if (isPositiveAck(ackText) || ackText) {
+    session.waitingForPostObjectionAck = false;
+    session.postObjectionMode = null;
+    session.postObjectionSourceId = null;
+    session.postObjectionClarificationCount = 0;
+
+    if (moveToNextStep(session)) {
+      sendNextPrompt(ws, session);
+      return;
+    }
+
+    session.shouldEndCall = true;
+    sendVoice(ws, "Okay perfect. Thank you for your time.");
+    return;
+  }
 }
 
 /**
@@ -1797,14 +2024,8 @@ async function handleStepResponse(ws, session, callerText) {
 
     if (matchedObjection.action === "resume_script_next_step") {
       sendVoice(ws, formatObjectionResponse(matchedObjection.response));
-
-      if (moveToNextStep(session)) {
-        sendNextPrompt(ws, session);
-        return;
-      }
-
-      session.shouldEndCall = true;
-      sendVoice(ws, "Okay perfect. Thank you for your time.");
+      const postMode = getPostObjectionModeForId(matchedObjection.id);
+      askPostObjectionFollowup(ws, session, postMode, matchedObjection.id);
       return;
     }
 
@@ -1819,14 +2040,8 @@ async function handleStepResponse(ws, session, callerText) {
   if (detectPossibleUnknownObjection(text)) {
     const freestyleReply = await getUnknownObjectionReply(session, callerText);
     sendVoice(ws, freestyleReply);
-
-    if (moveToNextStep(session)) {
-      sendNextPrompt(ws, session);
-      return;
-    }
-
-    session.shouldEndCall = true;
-    sendVoice(ws, "Okay perfect. Thank you for your time.");
+    const postMode = getPostObjectionModeForId("unknown");
+    askPostObjectionFollowup(ws, session, postMode, "unknown");
     return;
   }
 
@@ -2077,6 +2292,11 @@ wss.on("connection", (ws, req) => {
 
         if (session.waitingForCoverageTypeAnswer) {
           await handleCoverageTypeAnswer(ws, session, callerText);
+          return;
+        }
+
+        if (session.waitingForPostObjectionAck) {
+          await handlePostObjectionAck(ws, session, callerText);
           return;
         }
 
