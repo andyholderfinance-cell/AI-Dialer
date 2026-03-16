@@ -790,6 +790,80 @@ function detectPossibleUnknownObjection(text) {
   return objectionSignals.some((signal) => t.includes(signal));
 }
 
+function soundsLikeCallScreening(text) {
+  const t = normalizeText(text);
+
+  const patterns = [
+    "please say your name",
+    "say your name",
+    "state your name",
+    "name and reason for calling",
+    "reason for calling",
+    "please state your name",
+    "please say your name and reason for calling",
+    "i will see if i can connect you",
+    "i'll see if i can connect you",
+    "google voice subscriber",
+    "record your name",
+    "announce yourself",
+    "who is calling and why",
+    "say your name after the tone",
+    "tell me your name",
+    "tell me who is calling",
+    "who's calling and why",
+    "whos calling and why",
+  ];
+
+  return patterns.some((p) => t.includes(p));
+}
+
+function soundsLikeHumanGreeting(text) {
+  const t = normalizeText(text);
+
+  const patterns = [
+    "hello",
+    "hi",
+    "hey",
+    "yeah",
+    "yes",
+    "speaking",
+    "this is he",
+    "this is she",
+    "this is",
+    "who is this",
+    "who's this",
+    "whos this",
+    "yo",
+    "what's up",
+    "whats up",
+    "yeah this is",
+    "yes this is",
+  ];
+
+  return patterns.some((p) => t.includes(p));
+}
+
+function soundsLikeVoicemailGreeting(text) {
+  const t = normalizeText(text);
+
+  const patterns = [
+    "leave a message",
+    "leave your message",
+    "please leave a message",
+    "at the tone",
+    "record your message",
+    "not available",
+    "cannot take your call",
+    "can't take your call",
+    "mailbox",
+    "voice mailbox",
+    "voicemail",
+    "after the tone",
+  ];
+
+  return patterns.some((p) => t.includes(p));
+}
+
 function inferTimezoneFromState(state) {
   const s = safeString(state).trim().toUpperCase();
 
@@ -951,6 +1025,10 @@ function buildSessionFromLead(lead = {}) {
     pendingChosenSlot: null,
     notes: [],
     createdAt: Date.now(),
+
+    screeningState: "unknown",
+    screeningCount: 0,
+    scriptStarted: false,
   };
 }
 
@@ -1805,7 +1883,76 @@ async function primeCalendlySlots(session) {
 }
 
 async function handleConversationStart(ws, session) {
-  sendNextPrompt(ws, session);
+  session.scriptStarted = false;
+}
+
+async function handlePreScriptAudio(ws, session, callerText) {
+  const text = safeString(callerText);
+  const normalized = normalizeText(text);
+
+  if (!normalized) return true;
+
+  if (soundsLikeVoicemailGreeting(text)) {
+    session.screeningState = "voicemail";
+    session.shouldEndCall = true;
+
+    session.notes.push({
+      type: "voicemail_detected",
+      value: callerText,
+      at: Date.now(),
+    });
+
+    sendVoice(
+      ws,
+      `Hey this is ${CALLER_NAME}, just calling regarding the mortgage protection information tied to the property. Please give me a call back when you get a chance. Thanks.`
+    );
+    return true;
+  }
+
+  if (soundsLikeCallScreening(text)) {
+    session.screeningState = "screening";
+    session.screeningCount += 1;
+
+    session.notes.push({
+      type: "call_screen_detected",
+      value: callerText,
+      at: Date.now(),
+    });
+
+    if (session.screeningCount <= 2) {
+      sendVoice(ws, `${CALLER_NAME}, calling back.`);
+    } else {
+      session.shouldEndCall = true;
+      sendVoice(ws, "Okay, thank you.");
+    }
+
+    return true;
+  }
+
+  if (soundsLikeHumanGreeting(text)) {
+    session.screeningState = "human_connected";
+
+    if (!session.scriptStarted) {
+      session.scriptStarted = true;
+      session.currentStepIndex = getStepIndexById("intro_1");
+      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+      return true;
+    }
+  }
+
+  if (
+    session.screeningState === "screening" &&
+    !soundsLikeCallScreening(text) &&
+    !session.scriptStarted
+  ) {
+    session.screeningState = "human_connected";
+    session.scriptStarted = true;
+    session.currentStepIndex = getStepIndexById("intro_1");
+    sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+    return true;
+  }
+
+  return false;
 }
 
 async function handleActiveObjectionBranch(ws, session, callerText) {
@@ -2047,6 +2194,45 @@ async function handleStepResponse(ws, session, callerText) {
 
   switch (step.id) {
     case "intro_1": {
+      const t = normalizeText(text);
+
+      if (
+        containsAny(t, [
+          "yes",
+          "yeah",
+          "speaking",
+          "this is he",
+          "this is she",
+          "this is",
+          "who is this",
+          "who's this",
+          "whos this",
+          "hello",
+          "hi",
+          "hey",
+        ])
+      ) {
+        session.currentStepIndex = getStepIndexById("intro_2");
+        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
+        return;
+      }
+
+      if (
+        containsAny(t, [
+          "wrong number",
+          "you have the wrong number",
+          "not here",
+          "not available",
+          "he's not here",
+          "she's not here",
+          "not me",
+        ])
+      ) {
+        session.shouldEndCall = true;
+        sendVoice(ws, "Oh okay, sorry about that. Have a great day.");
+        return;
+      }
+
       session.currentStepIndex = getStepIndexById("intro_2");
       sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead));
       return;
@@ -2274,14 +2460,26 @@ wss.on("connection", (ws, req) => {
         const callerText = data.voicePrompt;
         console.log("Caller said:", callerText);
 
-        if (detectGoodbye(callerText)) {
-          session.shouldEndCall = true;
-          sendVoice(ws, "Alright, no problem. Have a great rest of your day.");
+        if (session.shouldEndCall) {
+          sendVoice(ws, "Thank you. Goodbye.");
           return;
         }
 
-        if (session.shouldEndCall) {
-          sendVoice(ws, "Thank you. Goodbye.");
+        if (!session.scriptStarted) {
+          const handledPreScript = await handlePreScriptAudio(
+            ws,
+            session,
+            callerText
+          );
+
+          if (handledPreScript) {
+            return;
+          }
+        }
+
+        if (detectGoodbye(callerText)) {
+          session.shouldEndCall = true;
+          sendVoice(ws, "Alright, no problem. Have a great rest of your day.");
           return;
         }
 
