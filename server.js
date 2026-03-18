@@ -21,7 +21,9 @@ const CALENDLY_API_KEY = process.env.CALENDLY_API_KEY;
 const CALENDLY_EVENT_TYPE_URI = process.env.CALENDLY_EVENT_TYPE_URI;
 
 const SLOT_HOLD_MS = Number(process.env.SLOT_HOLD_MS || 4 * 60 * 1000);
-const SLOT_HOLD_CLEANUP_MS = Number(process.env.SLOT_HOLD_CLEANUP_MS || 30 * 1000);
+const SLOT_HOLD_CLEANUP_MS = Number(
+  process.env.SLOT_HOLD_CLEANUP_MS || 30 * 1000
+);
 
 const client = twilio(accountSid, authToken);
 
@@ -650,6 +652,11 @@ function safeString(value) {
   return String(value);
 }
 
+function requiredAnswer(value, fallback = "N/A") {
+  const v = safeString(value).trim();
+  return v || fallback;
+}
+
 function normalizeText(text) {
   return safeString(text)
     .toLowerCase()
@@ -1092,7 +1099,9 @@ function detectCoverageType(text) {
   if (containsAny(t, ["through work", "work policy", "job", "employer"])) {
     return "work";
   }
-  if (containsAny(t, ["mortgage", "specifically for the mortgage", "home loan"])) {
+  if (
+    containsAny(t, ["mortgage", "specifically for the mortgage", "home loan"])
+  ) {
     return "mortgage_specific";
   }
   if (containsAny(t, ["personal", "whole life", "term life", "life policy"])) {
@@ -1142,7 +1151,8 @@ function validateEnv() {
   if (!process.env.TWILIO_AUTH_TOKEN) missing.push("TWILIO_AUTH_TOKEN");
   if (!process.env.TWILIO_PHONE_NUMBER) missing.push("TWILIO_PHONE_NUMBER");
   if (!process.env.CALENDLY_API_KEY) missing.push("CALENDLY_API_KEY");
-  if (!process.env.CALENDLY_EVENT_TYPE_URI) missing.push("CALENDLY_EVENT_TYPE_URI");
+  if (!process.env.CALENDLY_EVENT_TYPE_URI)
+    missing.push("CALENDLY_EVENT_TYPE_URI");
 
   if (missing.length) {
     console.error("Missing required env vars:", missing.join(", "));
@@ -1150,7 +1160,9 @@ function validateEnv() {
 
   if (
     process.env.CALENDLY_EVENT_TYPE_URI &&
-    !process.env.CALENDLY_EVENT_TYPE_URI.startsWith("https://api.calendly.com/event_types/")
+    !process.env.CALENDLY_EVENT_TYPE_URI.startsWith(
+      "https://api.calendly.com/event_types/"
+    )
   ) {
     console.error(
       "CALENDLY_EVENT_TYPE_URI does not look like a Calendly API event type URI."
@@ -1558,8 +1570,7 @@ function getClarifyingFollowupForStep(stepId) {
       "No, this call is just to verify the file and see if you want to review it with the underwriter.",
     call_back:
       "This call is really just to find a better time that works for you.",
-    who_are_you:
-      `This is ${CALLER_NAME}, the case worker assigned to the file on my end.`,
+    who_are_you: `This is ${CALLER_NAME}, the case worker assigned to the file on my end.`,
     qualify:
       "A lot of people think that at first, which is why the underwriter checks multiple options.",
     no_mortgage:
@@ -1687,7 +1698,8 @@ function detectCallbackReason(text) {
 
   if (containsAny(t, ["at work", "working", "on the job"])) return "at_work";
   if (containsAny(t, ["driving", "in the car"])) return "driving";
-  if (containsAny(t, ["busy", "bad time", "cant talk", "can't talk"])) return "busy";
+  if (containsAny(t, ["busy", "bad time", "cant talk", "can't talk"]))
+    return "busy";
   if (containsAny(t, ["call me later", "call back"])) return "asked_for_callback";
 
   return "general_callback";
@@ -1719,7 +1731,10 @@ function resumeAfterObjection(ws, session) {
   const returnStepId = session.objectionReturnStepId;
   const currentReturnIndex = getStepIndexById(returnStepId);
   const resolvedId =
-    session.postObjectionSourceId || session.activeObjection || session.lastResolvedObjectionId || null;
+    session.postObjectionSourceId ||
+    session.activeObjection ||
+    session.lastResolvedObjectionId ||
+    null;
 
   session.lastResolvedObjectionId = resolvedId;
   session.objectionReturnStepId = null;
@@ -1743,19 +1758,31 @@ function resumeAfterObjection(ws, session) {
 
   if (returnStepId === "verify_address") {
     session.currentStepIndex = getStepIndexById("verify_loan");
-    sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+    sendVoice(
+      ws,
+      renderTemplate(getCurrentStep(session).text, session.lead),
+      session
+    );
     return;
   }
 
   if (returnStepId === "verify_loan") {
     session.currentStepIndex = getStepIndexById("verify_coborrower");
-    sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+    sendVoice(
+      ws,
+      renderTemplate(getCurrentStep(session).text, session.lead),
+      session
+    );
     return;
   }
 
   if (returnStepId === "verify_coborrower") {
     session.currentStepIndex = getStepIndexById("verify_age");
-    sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+    sendVoice(
+      ws,
+      renderTemplate(getCurrentStep(session).text, session.lead),
+      session
+    );
     return;
   }
 
@@ -1816,7 +1843,11 @@ async function handleSilenceOrBlank(ws, session) {
   if (session.blankResponseCount >= 3) {
     session.shouldEndCall = true;
     setOutcome(session, "dead_air");
-    sendVoice(ws, "No worries, I'll let you go for now. Have a great day.", session);
+    sendVoice(
+      ws,
+      "No worries, I'll let you go for now. Have a great day.",
+      session
+    );
     return true;
   }
 
@@ -1900,7 +1931,11 @@ function acquireSlotHold(session, slot) {
   if (!slot?.utcTime) return false;
 
   const existing = slotHolds.get(slot.utcTime);
-  if (existing && existing.sessionId !== session.id && existing.expiresAt > Date.now()) {
+  if (
+    existing &&
+    existing.sessionId !== session.id &&
+    existing.expiresAt > Date.now()
+  ) {
     return false;
   }
 
@@ -1951,7 +1986,9 @@ function buildCalendlyErrorSummary(error) {
     message,
     invalidParams,
     raw: body,
-    isAuth: title.toLowerCase().includes("unauthenticated") || message.toLowerCase().includes("access token"),
+    isAuth:
+      title.toLowerCase().includes("unauthenticated") ||
+      message.toLowerCase().includes("access token"),
     isInvalidArgument: title.toLowerCase().includes("invalid argument"),
   };
 }
@@ -1975,7 +2012,9 @@ function slotTimeVariants(slot) {
   variants.add(compact);
   variants.add(compact.replace(":00", ""));
   variants.add(compact.replace(":", ""));
-  variants.add(compact.replace("pm", " p m").replace("am", " a m").replace(/\s+/g, ""));
+  variants.add(
+    compact.replace("pm", " p m").replace("am", " a m").replace(/\s+/g, "")
+  );
   variants.add(compact.replace(":00pm", "pm"));
   variants.add(compact.replace(":00am", "am"));
 
@@ -2022,15 +2061,25 @@ function chooseSlotFromResponse(text, session, pair = "first") {
     }
   }
 
-  if (a && containsAny(t, ["first", "earlier", "earliest", "the first one", "the earlier one"])) {
+  if (
+    a &&
+    containsAny(t, ["first", "earlier", "earliest", "the first one", "the earlier one"])
+  ) {
     return a;
   }
 
-  if (b && containsAny(t, ["second", "later", "latest", "the second one", "the later one"])) {
+  if (
+    b &&
+    containsAny(t, ["second", "later", "latest", "the second one", "the later one"])
+  ) {
     return b;
   }
 
-  if (a && !b && containsAny(t, ["yes", "okay", "that works", "works", "fine", "sure"])) {
+  if (
+    a &&
+    !b &&
+    containsAny(t, ["yes", "okay", "that works", "works", "fine", "sure"])
+  ) {
     return a;
   }
 
@@ -2215,53 +2264,56 @@ function buildCalendlyQuestionsAndAnswers(session) {
   return [
     {
       question: "Phone Number:",
-      answer: safeString(session.lead.phone),
+      answer: requiredAnswer(session.lead.phone, "No phone provided"),
       position: 0,
     },
     {
       question: "State:",
-      answer: safeString(session.lead.state),
+      answer: requiredAnswer(session.lead.state, DEFAULT_STATE),
       position: 1,
     },
     {
       question: "Original Mortgage Loan Amount:",
-      answer: safeString(session.lead.loan_amount),
+      answer: requiredAnswer(session.lead.loan_amount, "Unknown"),
       position: 2,
     },
     {
       question: "Lender:",
-      answer: safeString(session.lead.lender),
+      answer: requiredAnswer(session.lead.lender, "Unknown"),
       position: 3,
     },
     {
       question: "Address:",
-      answer: safeString(session.lead.address),
+      answer: requiredAnswer(session.lead.address, "Unknown"),
       position: 4,
     },
     {
       question: "Age:",
-      answer: safeString(session.lead.age),
+      answer: requiredAnswer(session.lead.age, "Unknown"),
       position: 5,
     },
     {
       question: "Policy Review?",
-      answer: safeString(session.lead.policy_review || "No"),
+      answer: requiredAnswer(session.lead.policy_review, "No"),
       position: 6,
     },
     {
       question:
         "ONLY If Its a Policy Review\\nCarrier:\\nCoverage:\\nPremium:\\nProduct:",
-      answer: safeString(session.lead.coverage || ""),
+      answer: requiredAnswer(
+        session.lead.coverage,
+        "N/A - not a policy review"
+      ),
       position: 7,
     },
     {
       question: "Language:",
-      answer: safeString(session.lead.language || "English"),
+      answer: requiredAnswer(session.lead.language, "English"),
       position: 8,
     },
     {
       question: "Booked By:",
-      answer: safeString(session.lead.booked_by || CALLER_NAME),
+      answer: requiredAnswer(session.lead.booked_by, CALLER_NAME),
       position: 9,
     },
   ];
@@ -2830,7 +2882,12 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
       "Gotcha. The review is really just to make sure what you have still fits what you need and that you're not overpaying.",
       session
     );
-    askPostObjectionFollowup(ws, session, "fair_enough", "already_have_insurance");
+    askPostObjectionFollowup(
+      ws,
+      session,
+      "fair_enough",
+      "already_have_insurance"
+    );
     return;
   }
 
@@ -3035,7 +3092,11 @@ async function handleStepResponse(ws, session, callerText) {
   const text = safeString(callerText);
   const normalized = normalizeText(text);
 
-  const relativeHandled = await handleRelativeOrWrongParty(ws, session, callerText);
+  const relativeHandled = await handleRelativeOrWrongParty(
+    ws,
+    session,
+    callerText
+  );
   if (relativeHandled) return;
 
   const matchedObjection = detectObjection(text);
@@ -3058,12 +3119,20 @@ async function handleStepResponse(ws, session, callerText) {
       session.shouldEndCall = true;
       setOutcome(session, "do_not_call");
       releaseHeldSlotForSession(session);
-      sendVoice(ws, formatObjectionResponse(matchedObjection.response), session);
+      sendVoice(
+        ws,
+        formatObjectionResponse(matchedObjection.response),
+        session
+      );
       return;
     }
 
     if (matchedObjection.action === "callback_branch") {
-      sendVoice(ws, formatObjectionResponse(matchedObjection.response), session);
+      sendVoice(
+        ws,
+        formatObjectionResponse(matchedObjection.response),
+        session
+      );
       session.activeObjection = "callback_request";
       session.waitingForObjectionBranch = true;
       session.awaitingCallbackTime = true;
@@ -3081,7 +3150,11 @@ async function handleStepResponse(ws, session, callerText) {
       session.activeObjection = "existing_coverage_detail";
       session.waitingForObjectionBranch = true;
       note(session, "has_existing_coverage", callerText);
-      sendVoice(ws, formatObjectionResponse(matchedObjection.response), session);
+      sendVoice(
+        ws,
+        formatObjectionResponse(matchedObjection.response),
+        session
+      );
       return;
     }
 
@@ -3091,7 +3164,11 @@ async function handleStepResponse(ws, session, callerText) {
         session.crm.no_mortgage = "Yes";
       }
 
-      sendVoice(ws, formatObjectionResponse(matchedObjection.response), session);
+      sendVoice(
+        ws,
+        formatObjectionResponse(matchedObjection.response),
+        session
+      );
       const postMode = getPostObjectionModeForId(matchedObjection.id);
       askPostObjectionFollowup(ws, session, postMode, matchedObjection.id);
       return;
@@ -3100,7 +3177,11 @@ async function handleStepResponse(ws, session, callerText) {
     if (matchedObjection.action === "branch_followup") {
       session.activeObjection = matchedObjection.id;
       session.waitingForObjectionBranch = true;
-      sendVoice(ws, formatObjectionResponse(matchedObjection.response), session);
+      sendVoice(
+        ws,
+        formatObjectionResponse(matchedObjection.response),
+        session
+      );
       return;
     }
   }
@@ -3147,7 +3228,11 @@ async function handleStepResponse(ws, session, callerText) {
         ])
       ) {
         session.currentStepIndex = getStepIndexById("intro_2");
-        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+        sendVoice(
+          ws,
+          renderTemplate(getCurrentStep(session).text, session.lead),
+          session
+        );
         return;
       }
 
@@ -3160,7 +3245,11 @@ async function handleStepResponse(ws, session, callerText) {
       }
 
       session.currentStepIndex = getStepIndexById("intro_2");
-      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+      sendVoice(
+        ws,
+        renderTemplate(getCurrentStep(session).text, session.lead),
+        session
+      );
       return;
     }
 
@@ -3181,12 +3270,20 @@ async function handleStepResponse(ws, session, callerText) {
         session.verifyingField = "address";
         note(session, "address_mismatch", callerText);
         session.currentStepIndex = getStepIndexById("verify_address_update");
-        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+        sendVoice(
+          ws,
+          renderTemplate(getCurrentStep(session).text, session.lead),
+          session
+        );
         return;
       }
 
       session.currentStepIndex = getStepIndexById("verify_loan");
-      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+      sendVoice(
+        ws,
+        renderTemplate(getCurrentStep(session).text, session.lead),
+        session
+      );
       return;
     }
 
@@ -3199,7 +3296,10 @@ async function handleStepResponse(ws, session, callerText) {
       session.currentStepIndex = getStepIndexById("verify_loan");
       sendVoice(
         ws,
-        `${naturalAck()}. ${renderTemplate(getCurrentStep(session).text, session.lead)}`,
+        `${naturalAck()}. ${renderTemplate(
+          getCurrentStep(session).text,
+          session.lead
+        )}`,
         session
       );
       return;
@@ -3210,12 +3310,20 @@ async function handleStepResponse(ws, session, callerText) {
         session.verifyingField = "loan_amount";
         note(session, "loan_mismatch", callerText);
         session.currentStepIndex = getStepIndexById("verify_loan_update");
-        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+        sendVoice(
+          ws,
+          renderTemplate(getCurrentStep(session).text, session.lead),
+          session
+        );
         return;
       }
 
       session.currentStepIndex = getStepIndexById("verify_coborrower");
-      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+      sendVoice(
+        ws,
+        renderTemplate(getCurrentStep(session).text, session.lead),
+        session
+      );
       return;
     }
 
@@ -3231,7 +3339,10 @@ async function handleStepResponse(ws, session, callerText) {
       session.currentStepIndex = getStepIndexById("verify_coborrower");
       sendVoice(
         ws,
-        `${naturalAck()}. ${renderTemplate(getCurrentStep(session).text, session.lead)}`,
+        `${naturalAck()}. ${renderTemplate(
+          getCurrentStep(session).text,
+          session.lead
+        )}`,
         session
       );
       return;
@@ -3247,7 +3358,11 @@ async function handleStepResponse(ws, session, callerText) {
       note(session, "co_borrower_answer", session.lead.co_borrower);
 
       session.currentStepIndex = getStepIndexById("verify_age");
-      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+      sendVoice(
+        ws,
+        renderTemplate(getCurrentStep(session).text, session.lead),
+        session
+      );
       return;
     }
 
@@ -3256,7 +3371,11 @@ async function handleStepResponse(ws, session, callerText) {
         session.verifyingField = "age";
         note(session, "age_mismatch", callerText);
         session.currentStepIndex = getStepIndexById("verify_age_update");
-        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+        sendVoice(
+          ws,
+          renderTemplate(getCurrentStep(session).text, session.lead),
+          session
+        );
         return;
       }
 
@@ -3285,12 +3404,20 @@ async function handleStepResponse(ws, session, callerText) {
       note(session, "meeting_type", session.lead.meeting_type);
 
       session.currentStepIndex = getStepIndexById("calendar_check");
-      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+      sendVoice(
+        ws,
+        renderTemplate(getCurrentStep(session).text, session.lead),
+        session
+      );
 
       try {
         await primeCalendlySlots(session);
         session.currentStepIndex = getStepIndexById("offer_times_today");
-        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+        sendVoice(
+          ws,
+          renderTemplate(getCurrentStep(session).text, session.lead),
+          session
+        );
       } catch (error) {
         console.error("Calendly availability error:", {
           message: error.message,
@@ -3338,7 +3465,11 @@ async function handleStepResponse(ws, session, callerText) {
       ) {
         releaseHeldSlotForSession(session);
         session.currentStepIndex = getStepIndexById("offer_times_tomorrow");
-        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+        sendVoice(
+          ws,
+          renderTemplate(getCurrentStep(session).text, session.lead),
+          session
+        );
         return;
       }
 
@@ -3377,7 +3508,11 @@ async function handleStepResponse(ws, session, callerText) {
         });
 
         session.currentStepIndex = getStepIndexById("collect_email");
-        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+        sendVoice(
+          ws,
+          renderTemplate(getCurrentStep(session).text, session.lead),
+          session
+        );
         return;
       }
 
@@ -3394,7 +3529,11 @@ async function handleStepResponse(ws, session, callerText) {
       note(session, "tomorrow_preference", pref || callerText);
 
       session.currentStepIndex = getStepIndexById("offer_times_tomorrow_slots");
-      sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+      sendVoice(
+        ws,
+        renderTemplate(getCurrentStep(session).text, session.lead),
+        session
+      );
       return;
     }
 
@@ -3434,7 +3573,11 @@ async function handleStepResponse(ws, session, callerText) {
         });
 
         session.currentStepIndex = getStepIndexById("collect_email");
-        sendVoice(ws, renderTemplate(getCurrentStep(session).text, session.lead), session);
+        sendVoice(
+          ws,
+          renderTemplate(getCurrentStep(session).text, session.lead),
+          session
+        );
         return;
       }
 
@@ -3544,7 +3687,11 @@ async function handleStepResponse(ws, session, callerText) {
 
       const currentStep = getCurrentStep(session);
       if (currentStep && isQuestionLike(currentStep)) {
-        sendVoice(ws, renderTemplate(currentStep.text, session.lead), session);
+        sendVoice(
+          ws,
+          renderTemplate(currentStep.text, session.lead),
+          session
+        );
       }
 
       return;
