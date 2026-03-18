@@ -1698,9 +1698,12 @@ function detectCallbackReason(text) {
 
   if (containsAny(t, ["at work", "working", "on the job"])) return "at_work";
   if (containsAny(t, ["driving", "in the car"])) return "driving";
-  if (containsAny(t, ["busy", "bad time", "cant talk", "can't talk"]))
+  if (containsAny(t, ["busy", "bad time", "cant talk", "can't talk"])) {
     return "busy";
-  if (containsAny(t, ["call me later", "call back"])) return "asked_for_callback";
+  }
+  if (containsAny(t, ["call me later", "call back"])) {
+    return "asked_for_callback";
+  }
 
   return "general_callback";
 }
@@ -2036,6 +2039,108 @@ function slotTimeVariants(slot) {
   return Array.from(variants);
 }
 
+function spokenWordsToTimeCandidates(text) {
+  const t = normalizeText(text);
+
+  const numberWords = {
+    one: 1,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
+    six: 6,
+    seven: 7,
+    eight: 8,
+    nine: 9,
+    ten: 10,
+    eleven: 11,
+    twelve: 12,
+  };
+
+  const minuteWords = {
+    "00": ["o clock", "oclock", "hundred"],
+    "15": ["fifteen"],
+    "30": ["thirty"],
+    "45": ["forty five", "forty-five", "fortyfive"],
+  };
+
+  const candidates = new Set();
+
+  const digitMatches = [
+    ...t.matchAll(/\b(\d{1,2})[:\s](00|15|30|45)\b/g),
+    ...t.matchAll(/\b(\d{1,2})(00|15|30|45)\b/g),
+    ...t.matchAll(/\b(\d{1,2})\s*(am|pm)\b/g),
+    ...t.matchAll(/\b(\d{1,2})\b/g),
+  ];
+
+  for (const match of digitMatches) {
+    const hour = match[1];
+    const part2 = match[2] || "";
+    const part3 = match[3] || "";
+
+    if (part3 === "am" || part3 === "pm") {
+      candidates.add(`${hour}:00${part3}`);
+      candidates.add(`${hour}${part3}`);
+    } else if (part2 && ["00", "15", "30", "45"].includes(part2)) {
+      candidates.add(`${hour}:${part2}`);
+      candidates.add(`${hour}${part2}`);
+    } else if (!part2 && Number(hour) >= 1 && Number(hour) <= 12) {
+      candidates.add(`${hour}:00`);
+      candidates.add(`${hour}`);
+    }
+  }
+
+  for (const [word, hour] of Object.entries(numberWords)) {
+    if (t.includes(word)) {
+      candidates.add(`${hour}:00`);
+      candidates.add(`${hour}`);
+
+      for (const [minute, phrases] of Object.entries(minuteWords)) {
+        for (const phrase of phrases) {
+          if (t.includes(`${word} ${phrase}`)) {
+            candidates.add(`${hour}:${minute}`);
+            candidates.add(`${hour}${minute}`);
+          }
+        }
+      }
+
+      if (t.includes(`${word} pm`)) {
+        candidates.add(`${hour}:00pm`);
+        candidates.add(`${hour}pm`);
+      }
+
+      if (t.includes(`${word} am`)) {
+        candidates.add(`${hour}:00am`);
+        candidates.add(`${hour}am`);
+      }
+    }
+  }
+
+  return Array.from(candidates).map((x) =>
+    String(x).toLowerCase().replace(/\s+/g, "")
+  );
+}
+
+function slotMatchesCandidate(slot, candidates) {
+  const slotVariants = slotTimeVariants(slot).map((v) =>
+    String(v).toLowerCase().replace(/\s+/g, "")
+  );
+
+  for (const candidate of candidates) {
+    for (const variant of slotVariants) {
+      if (candidate === variant) return true;
+
+      if (variant.includes(candidate) || candidate.includes(variant)) return true;
+
+      const candidateDigits = candidate.replace(/[^\d]/g, "");
+      const variantDigits = variant.replace(/[^\d]/g, "");
+      if (candidateDigits && variantDigits.startsWith(candidateDigits)) return true;
+    }
+  }
+
+  return false;
+}
+
 function buildCandidateSlotList(session, pair = "first") {
   const raw =
     pair === "first"
@@ -2061,16 +2166,35 @@ function chooseSlotFromResponse(text, session, pair = "first") {
     }
   }
 
+  const spokenCandidates = spokenWordsToTimeCandidates(text);
+  for (const slot of options) {
+    if (slotMatchesCandidate(slot, spokenCandidates)) {
+      return slot;
+    }
+  }
+
   if (
     a &&
-    containsAny(t, ["first", "earlier", "earliest", "the first one", "the earlier one"])
+    containsAny(t, [
+      "first",
+      "earlier",
+      "earliest",
+      "the first one",
+      "the earlier one",
+    ])
   ) {
     return a;
   }
 
   if (
     b &&
-    containsAny(t, ["second", "later", "latest", "the second one", "the later one"])
+    containsAny(t, [
+      "second",
+      "later",
+      "latest",
+      "the second one",
+      "the later one",
+    ])
   ) {
     return b;
   }
@@ -2081,36 +2205,6 @@ function chooseSlotFromResponse(text, session, pair = "first") {
     containsAny(t, ["yes", "okay", "that works", "works", "fine", "sure"])
   ) {
     return a;
-  }
-
-  if (a && containsAny(t, ["7 15", "715"])) {
-    if (normalizeTimeForMatching(a.localTime).includes("715")) return a;
-    if (b && normalizeTimeForMatching(b.localTime).includes("715")) return b;
-  }
-
-  if (a && containsAny(t, ["7 30", "730"])) {
-    if (normalizeTimeForMatching(a.localTime).includes("730")) return a;
-    if (b && normalizeTimeForMatching(b.localTime).includes("730")) return b;
-  }
-
-  if (a && containsAny(t, ["7 45", "745"])) {
-    if (normalizeTimeForMatching(a.localTime).includes("745")) return a;
-    if (b && normalizeTimeForMatching(b.localTime).includes("745")) return b;
-  }
-
-  if (a && containsAny(t, ["8 00", "800", "8 pm", "8"])) {
-    if (normalizeTimeForMatching(a.localTime).includes("8:00pm")) return a;
-    if (b && normalizeTimeForMatching(b.localTime).includes("8:00pm")) return b;
-  }
-
-  if (a && containsAny(t, ["8 15", "815"])) {
-    if (normalizeTimeForMatching(a.localTime).includes("815")) return a;
-    if (b && normalizeTimeForMatching(b.localTime).includes("815")) return b;
-  }
-
-  if (a && containsAny(t, ["8 30", "830"])) {
-    if (normalizeTimeForMatching(a.localTime).includes("830")) return a;
-    if (b && normalizeTimeForMatching(b.localTime).includes("830")) return b;
   }
 
   return null;
@@ -3510,7 +3604,10 @@ async function handleStepResponse(ws, session, callerText) {
         session.currentStepIndex = getStepIndexById("collect_email");
         sendVoice(
           ws,
-          renderTemplate(getCurrentStep(session).text, session.lead),
+          `Perfect, I have you at ${chosen.localTime}. ${renderTemplate(
+            getCurrentStep(session).text,
+            session.lead
+          )}`,
           session
         );
         return;
@@ -3575,7 +3672,10 @@ async function handleStepResponse(ws, session, callerText) {
         session.currentStepIndex = getStepIndexById("collect_email");
         sendVoice(
           ws,
-          renderTemplate(getCurrentStep(session).text, session.lead),
+          `Perfect, I have you at ${chosen.localTime}. ${renderTemplate(
+            getCurrentStep(session).text,
+            session.lead
+          )}`,
           session
         );
         return;
