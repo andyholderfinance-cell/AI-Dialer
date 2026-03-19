@@ -45,6 +45,8 @@ Your tone must sound:
 - calm
 - slow
 - natural
+- bored tone
+- tired
 - warm
 - conversational
 - lightly concerned like you are looking at a file
@@ -78,7 +80,7 @@ const SCRIPT_STEPS = [
   {
     id: "intro_2",
     type: "question",
-    text: `Hey {{first_name}}, this is ${CALLER_NAME}. I'm just giving you a quick call about the mortgage life and disability protection information tied to your home loan with {{lender}}... Does that ring a bell?`,
+    text: `Hey {{first_name}}, this is ${CALLER_NAME}. I'm just giving you a quick call in regards to the mortgage life and disability protection file... it looks like it was opened up, back when you closed on your home with {{lender}}... Does that sound familiar?`,
   },
   {
     id: "intro_3",
