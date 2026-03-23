@@ -654,11 +654,6 @@ function safeString(value) {
   return String(value);
 }
 
-function requiredAnswer(value, fallback = "N/A") {
-  const v = safeString(value).trim();
-  return v || fallback;
-}
-
 function normalizeText(text) {
   return safeString(text)
     .toLowerCase()
@@ -1153,8 +1148,9 @@ function validateEnv() {
   if (!process.env.TWILIO_AUTH_TOKEN) missing.push("TWILIO_AUTH_TOKEN");
   if (!process.env.TWILIO_PHONE_NUMBER) missing.push("TWILIO_PHONE_NUMBER");
   if (!process.env.CALENDLY_API_KEY) missing.push("CALENDLY_API_KEY");
-  if (!process.env.CALENDLY_EVENT_TYPE_URI)
+  if (!process.env.CALENDLY_EVENT_TYPE_URI) {
     missing.push("CALENDLY_EVENT_TYPE_URI");
+  }
 
   if (missing.length) {
     console.error("Missing required env vars:", missing.join(", "));
@@ -1191,7 +1187,7 @@ function buildSessionFromLead(lead = {}) {
     co_borrower: lead.co_borrower || "",
     state: stateValue,
     email: lead.email || "",
-    meeting_type: lead.meeting_type || "",
+    meeting_type: lead.meeting_type || "Phone call",
     timezone,
     scheduled_time: "",
     scheduled_time_utc: "",
@@ -1365,8 +1361,8 @@ function detectYes(text) {
 function detectZoomPreference(text) {
   const t = normalizeText(text);
   if (t.includes("zoom")) return "Zoom";
-  if (t.includes("phone")) return "Phone";
-  if (t.includes("call")) return "Phone";
+  if (t.includes("phone")) return "Phone call";
+  if (t.includes("call")) return "Phone call";
   return "";
 }
 
@@ -1564,6 +1560,8 @@ function getClarifyingFollowupForStep(stepId) {
       "No, you do not have to get it. I'm just checking whether you were able to get something in place.",
     who_do_you_work_FOR:
       "I work under the underwriter assigned to the file, so we are not tied to just one company.",
+    who_do_you_WORK_for:
+      "I work under the underwriter assigned to the file, so we are not tied to just one company.",
     who_do_you_work_for:
       "I work under the underwriter assigned to the file, so we are not tied to just one company.",
     email_it:
@@ -1730,6 +1728,37 @@ function releaseHeldSlotForSession(session) {
     }
     session.heldSlotUtcTime = "";
   }
+}
+
+function buildCalendlyBookingFields(session) {
+  const lead = session.lead || {};
+
+  const fullName = safeString(
+    lead.full_name || lead.first_name || "Client"
+  ).trim();
+
+  const firstName = safeString(lead.first_name || "Client").trim();
+
+  const meetingType =
+    safeString(lead.meeting_type).trim() === "Zoom" ? "Zoom" : "Phone call";
+
+  return {
+    name: fullName || "Client",
+    first_name: firstName || "Client",
+    email: safeString(lead.email).trim(),
+    meeting_type: meetingType,
+    phone: safeString(lead.phone).trim(),
+    state: safeString(lead.state || DEFAULT_STATE).trim(),
+    loan_amount: safeString(lead.loan_amount || "Unknown").trim(),
+    lender: safeString(lead.lender || "Unknown").trim(),
+    address: safeString(lead.address || "Unknown").trim(),
+    age: safeString(lead.age || "Unknown").trim(),
+    policy_review:
+      safeString(lead.policy_review).trim() === "Yes" ? "Yes" : "No",
+    language: safeString(lead.language || "English").trim(),
+    booked_by: safeString(lead.booked_by || CALLER_NAME).trim(),
+    timezone: safeString(lead.timezone || DEFAULT_TIMEZONE).trim(),
+  };
 }
 
 function resumeAfterObjection(ws, session) {
@@ -2131,7 +2160,6 @@ function slotMatchesCandidate(slot, candidates) {
   for (const candidate of candidates) {
     for (const variant of slotVariants) {
       if (candidate === variant) return true;
-
       if (variant.includes(candidate) || candidate.includes(variant)) return true;
 
       const candidateDigits = candidate.replace(/[^\d]/g, "");
@@ -2357,62 +2385,66 @@ async function primeCalendlySlots(session, forceRefresh = false) {
 }
 
 function buildCalendlyQuestionsAndAnswers(session) {
-  return [
+  const fields = buildCalendlyBookingFields(session);
+
+  const answers = [
     {
       question: "Phone Number:",
-      answer: requiredAnswer(session.lead.phone, "No phone provided"),
+      answer: fields.phone,
       position: 0,
     },
     {
       question: "State:",
-      answer: requiredAnswer(session.lead.state, DEFAULT_STATE),
+      answer: fields.state,
       position: 1,
     },
     {
       question: "Original Mortgage Loan Amount:",
-      answer: requiredAnswer(session.lead.loan_amount, "Unknown"),
+      answer: fields.loan_amount,
       position: 2,
     },
     {
       question: "Lender:",
-      answer: requiredAnswer(session.lead.lender, "Unknown"),
+      answer: fields.lender,
       position: 3,
     },
     {
       question: "Address:",
-      answer: requiredAnswer(session.lead.address, "Unknown"),
+      answer: fields.address,
       position: 4,
     },
     {
       question: "Age:",
-      answer: requiredAnswer(session.lead.age, "Unknown"),
+      answer: fields.age,
       position: 5,
     },
-    {
-      question: "Policy Review?",
-      answer: requiredAnswer(session.lead.policy_review, "No"),
-      position: 6,
-    },
-    {
-      question:
-        "ONLY If Its a Policy Review\\nCarrier:\\nCoverage:\\nPremium:\\nProduct:",
-      answer: requiredAnswer(
-        session.lead.coverage,
-        "N/A - not a policy review"
-      ),
-      position: 7,
-    },
-    {
-      question: "Language:",
-      answer: requiredAnswer(session.lead.language, "English"),
-      position: 8,
-    },
-    {
-      question: "Booked By:",
-      answer: requiredAnswer(session.lead.booked_by, CALLER_NAME),
-      position: 9,
-    },
   ];
+
+  if (fields.policy_review) {
+    answers.push({
+      question: "Policy Review?",
+      answer: fields.policy_review,
+      position: answers.length,
+    });
+  }
+
+  if (fields.language) {
+    answers.push({
+      question: "Language",
+      answer: fields.language,
+      position: answers.length,
+    });
+  }
+
+  if (fields.booked_by) {
+    answers.push({
+      question: "Booked By:",
+      answer: fields.booked_by,
+      position: answers.length,
+    });
+  }
+
+  return answers;
 }
 
 function buildCalendlyLocation(session) {
@@ -2461,26 +2493,41 @@ async function createCalendlyInvitee(session) {
     throw new Error("No selected Calendly slot");
   }
 
-  if (!session.lead.email) {
+  const fields = buildCalendlyBookingFields(session);
+
+  if (!fields.email) {
     throw new Error("Missing invitee email");
+  }
+
+  if (!fields.name) {
+    throw new Error("Missing invitee name");
+  }
+
+  if (!fields.phone) {
+    throw new Error("Missing phone number for Calendly");
   }
 
   const payload = {
     event_type: CALENDLY_EVENT_TYPE_URI,
     start_time: session.pendingChosenSlot.utcTime,
     invitee: {
-      name: safeString(session.lead.full_name || session.lead.first_name),
-      first_name: safeString(session.lead.first_name),
-      email: safeString(session.lead.email),
-      timezone: safeString(session.lead.timezone || DEFAULT_TIMEZONE),
+      name: fields.name,
+      first_name: fields.first_name,
+      email: fields.email,
+      timezone: fields.timezone,
+      text_reminder_number: fields.phone,
     },
-    location: buildCalendlyLocation(session),
+    location:
+      fields.meeting_type === "Zoom"
+        ? { kind: "zoom_conference" }
+        : {
+            kind: "outbound_call",
+            location: fields.phone,
+          },
     questions_and_answers: buildCalendlyQuestionsAndAnswers(session),
   };
 
-  if (session.lead.phone) {
-    payload.invitee.text_reminder_number = safeString(session.lead.phone);
-  }
+  console.log("Calendly invitee payload:", JSON.stringify(payload, null, 2));
 
   return calendlyFetch("/invitees", {
     method: "POST",
@@ -3495,7 +3542,7 @@ async function handleStepResponse(ws, session, callerText) {
     }
 
     case "virtual_meeting": {
-      session.lead.meeting_type = detectZoomPreference(text) || "Phone";
+      session.lead.meeting_type = detectZoomPreference(text) || "Phone call";
       session.crm.meeting_type = session.lead.meeting_type;
       note(session, "meeting_type", session.lead.meeting_type);
 
