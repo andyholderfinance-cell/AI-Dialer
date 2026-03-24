@@ -1367,7 +1367,6 @@ function buildPromptFromCurrentStep(session) {
 }
 
     idx += 1;
-  }
 
   session.currentStepIndex = questionStepIndex;
   return parts.join(" ");
@@ -3052,13 +3051,11 @@ async function handleCallbackCapture(ws, session, callerText) {
 }
 
 function markObjection(session, matchedObjection, currentStepId) {
+  session.resumeStepIndex = session.resumeStepIndex ?? session.currentStepIndex;
   session.objectionHistory.push(matchedObjection.id);
   session.crm.objection_history = [...session.objectionHistory];
   note(session, "objection", matchedObjection.id);
-
-  session.objectionReturnStepId =
-    session.pendingPromptStartStepId || currentStepId || getCurrentStep(session)?.id || null;
-
+  session.objectionReturnStepId = currentStepId;
   session.lastResolvedObjectionId = null;
 }
 
