@@ -1235,7 +1235,10 @@ function buildSessionFromLead(lead = {}) {
 
     currentStepIndex: 0,
     lastQuestionStepIndex: 0,
-
+    
+    resumeStepIndex: 0,
+    pendingPromptStartStepId: null,
+    pendingPromptEndStepId: null,
     activeObjection: null,
     waitingForObjectionBranch: false,
     waitingForCoverageTypeAnswer: false,
@@ -1334,6 +1337,8 @@ function isMeaningfulFollowupText(text) {
 
 function buildPromptFromCurrentStep(session) {
   const parts = [];
+  const startIndex = session.currentStepIndex;
+
   let idx = session.currentStepIndex;
   let questionStepIndex = session.currentStepIndex;
 
@@ -1346,6 +1351,20 @@ function buildPromptFromCurrentStep(session) {
       session.lastQuestionStepIndex = idx;
       break;
     }
+
+    idx += 1;
+    questionStepIndex = idx;
+  }
+
+  session.resumeStepIndex = startIndex;
+  session.pendingPromptStartStepId = SCRIPT_STEPS[startIndex]?.id || null;
+  session.pendingPromptEndStepId =
+    SCRIPT_STEPS[Math.min(questionStepIndex, SCRIPT_STEPS.length - 1)]?.id ||
+    null;
+
+  session.currentStepIndex = Math.min(questionStepIndex, SCRIPT_STEPS.length - 1);
+  return parts.join(" ");
+}
 
     idx += 1;
   }
@@ -1411,7 +1430,10 @@ function detectObjection(text) {
 
 function formatObjectionResponse(lines) {
   return lines
-    .map((line) => (line === "[PAUSE_3_SECONDS]" ? "..." : line))
+    .map((line) => {
+      if (safeString(line).includes("[PAUSE")) return "...";
+      return line;
+    })
     .join(" ");
 }
 
@@ -1782,8 +1804,12 @@ function buildCalendlyBookingFields(session) {
 }
 
 function resumeAfterObjection(ws, session) {
-  const returnStepId = session.objectionReturnStepId;
-  const currentReturnIndex = getStepIndexById(returnStepId);
+  const returnStepId =
+    session.objectionReturnStepId || session.pendingPromptStartStepId || null;
+
+  const returnIndex =
+    returnStepId !== null ? getStepIndexById(returnStepId) : session.resumeStepIndex;
+
   const resolvedId =
     session.postObjectionSourceId ||
     session.activeObjection ||
@@ -1792,29 +1818,33 @@ function resumeAfterObjection(ws, session) {
 
   session.lastResolvedObjectionId = resolvedId;
   session.objectionReturnStepId = null;
+  session.pendingPromptStartStepId = null;
+  session.pendingPromptEndStepId = null;
+
   clearObjectionState(session);
+
   const fillers = [
-  "Great... give me just a second,,.....",
-  "Okay... just a second here,,.....",
-  "Gotcha... one second,,.....",
-];
+    "Perfect... give me just a second.",
+    "Okay... just a second here.",
+    "Gotcha... one second.",
+  ];
 
-sendVoice(ws, pick(fillers), session);
-  
-  if (resolvedId === "no_mortgage") {
-    session.lead.no_mortgage = "Yes";
-    session.crm.no_mortgage = "Yes";
-    note(session, "no_mortgage", true);
+  sendVoice(ws, pick(fillers), session);
 
-    if (returnStepId === "verify_address" || returnStepId === "verify_loan") {
-      session.currentStepIndex = getStepIndexById("verify_coborrower");
-      sendVoice(
-        ws,
-        renderTemplate(getCurrentStep(session).text, session.lead),
-        session
-      );
-      return;
-    }
+  if (returnIndex !== null && returnIndex >= 0) {
+    session.currentStepIndex = returnIndex;
+    sendNextPrompt(ws, session);
+    return;
+  }
+
+  if (getCurrentStep(session)) {
+    sendNextPrompt(ws, session);
+    return;
+  }
+
+  session.shouldEndCall = true;
+  sendVoice(ws, "Okay perfect. Thank you for your time.", session);
+}
   }
 
   if (returnStepId === "verify_address") {
@@ -3025,7 +3055,10 @@ function markObjection(session, matchedObjection, currentStepId) {
   session.objectionHistory.push(matchedObjection.id);
   session.crm.objection_history = [...session.objectionHistory];
   note(session, "objection", matchedObjection.id);
-  session.objectionReturnStepId = currentStepId;
+
+  session.objectionReturnStepId =
+    session.pendingPromptStartStepId || currentStepId || getCurrentStep(session)?.id || null;
+
   session.lastResolvedObjectionId = null;
 }
 
