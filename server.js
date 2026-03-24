@@ -3097,13 +3097,13 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
             "That’s actually why we set it up this way — the underwriter works with a bunch of A-rated companies,",
             "so he can find whatever the most affordable option is for you.",
             "And since the call’s free, worst case you just get clarity on your options and decide from there.",
-            "No harm in taking a quick look, right?",
+            "No harm in taking a quick look",
           ]
         : [
             "I completely understand...",
             "That’s exactly why I’m calling — the underwriter works with multiple A-rated carriers,",
             "so he can usually find something that fits based on your age and health.",
-            "No harm in taking a quick look, right?",
+            "No harm in taking a quick look",
           ]
     );
 
