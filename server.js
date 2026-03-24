@@ -3227,7 +3227,6 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
     );
     return;
   }
-}
 
 async function handleCoverageTypeAnswer(ws, session, callerText) {
   note(session, "coverage_type_answer", callerText);
