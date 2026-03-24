@@ -3062,162 +3062,164 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
   }
 
   if (activeId === "not_interested") {
-    const t = normalizeText(callerText);
+  const t = normalizeText(callerText);
 
   if (
-  containsAny(t, [
-    "cost",
-    "price",
-    "pricing",
-    "too expensive",
-    "qualify",
-    "qualification",
-    "i don't think i'd qualify",
-    "i dont think id qualify",
-    "wondering if i'd qualify",
-    "wondering if i would qualify",
-    "not sure i qualify",
-    "dont think i qualify",
-    "don't think i qualify",
-    "i probably wouldnt qualify",
-    "i probably wouldn't qualify",
-  ])
-) {
-  const isCost = containsAny(t, [
-    "cost",
-    "price",
-    "pricing",
-    "too expensive",
-  ]);
+    containsAny(t, [
+      "cost",
+      "price",
+      "pricing",
+      "too expensive",
+      "qualify",
+      "qualification",
+      "i don't think i'd qualify",
+      "i dont think id qualify",
+      "wondering if i'd qualify",
+      "wondering if i would qualify",
+      "not sure i qualify",
+      "dont think i qualify",
+      "don't think i qualify",
+      "i probably wouldnt qualify",
+      "i probably wouldn't qualify",
+    ])
+  ) {
+    const isCost = containsAny(t, [
+      "cost",
+      "price",
+      "pricing",
+      "too expensive",
+    ]);
 
-  const responseText = formatObjectionResponse(
-    isCost
-      ? [
-          "Totally fair...",
-          "That’s actually why we set it up this way — the underwriter works with a bunch of A-rated companies,",
-          "so he can find whatever the most affordable option is for you.",
-          "And since the call’s free, worst case you just get clarity on your options and decide from there.",
-        ]
-      : [
-          "I completely understand...",
-          "That’s exactly why I’m calling — the underwriter works with multiple A-rated carriers,",
-          "so he can usually find something that fits based on your age and health.",
-        ]
-  );
+    const responseText = formatObjectionResponse(
+      isCost
+        ? [
+            "Totally fair...",
+            "That’s actually why we set it up this way — the underwriter works with a bunch of A-rated companies,",
+            "so he can find whatever the most affordable option is for you.",
+            "And since the call’s free, worst case you just get clarity on your options and decide from there.",
+            "No harm in taking a quick look, right?",
+          ]
+        : [
+            "I completely understand...",
+            "That’s exactly why I’m calling — the underwriter works with multiple A-rated carriers,",
+            "so he can usually find something that fits based on your age and health.",
+            "No harm in taking a quick look, right?",
+          ]
+    );
 
-  sendVoice(ws, responseText, session);
+    sendVoice(ws, responseText, session);
 
-  session.waitingForObjectionBranch = false;
-  askPostObjectionFollowup(
+    session.waitingForObjectionBranch = false;
+    askPostObjectionFollowup(
+      ws,
+      session,
+      "brief_ack",
+      isCost ? "cost" : "qualify"
+    );
+    return;
+  }
+
+  if (
+    containsAny(t, [
+      "still not interested",
+      "not interested",
+      "no",
+      "nope",
+      "just not interested",
+      "i'm good",
+      "im good",
+      "leave it alone",
+      "i'm okay",
+      "im okay",
+      "no thank you",
+      "i'll pass",
+      "dont want it",
+      "don't want it",
+    ])
+  ) {
+    session.activeObjection = "not_interested_coverage_check";
+    sendVoice(
+      ws,
+      "Okay, no worries. Before I close out the file, do you already have something in place for the home if something were to happen to you, or are you just not concerned about it?",
+      session
+    );
+    return;
+  }
+
+  sendVoice(
     ws,
-    session,
-    "fair_enough",
-    isCost ? "cost" : "qualify"
+    "Just so I update it correctly, is it more the cost, the qualifying part, or you just don't want to go over it?",
+    session
   );
   return;
 }
-    
-    if (
-      containsAny(t, [
-        "still not interested",
-        "not interested",
-        "no",
-        "nope",
-        "just not interested",
-        "i'm good",
-        "im good",
-        "leave it alone",
-        "i'm okay",
-        "im okay",
-        "no thank you",
-        "i'll pass",
-        "dont want it",
-        "don't want it",
-      ])
-    ) {
-      session.activeObjection = "not_interested_coverage_check";
-      sendVoice(
-        ws,
-        "Okay, no worries. Before I close out the file, do you already have something in place for the home if something were to happen to you, or are you just not concerned about it?",
-        session
-      );
-      return;
-    }
+
+if (activeId === "not_interested_coverage_check") {
+  const t = normalizeText(callerText);
+
+  if (
+    containsAny(t, [
+      "yes",
+      "yeah",
+      "i do",
+      "i have something",
+      "already covered",
+      "i already have coverage",
+      "i have life insurance",
+      "i have something through work",
+      "covered",
+      "i have insurance",
+      "i have a policy",
+      "i have coverage",
+      "i have something in place",
+      "i'm covered",
+      "im covered",
+    ])
+  ) {
+    session.waitingForObjectionBranch = false;
+    session.activeObjection = "existing_coverage_detail";
+    note(session, "has_existing_coverage", callerText);
 
     sendVoice(
       ws,
-      "Just so I update it correctly, is it more the cost, the qualifying part, or you just don't want to go over it?",
+      "Okay great, and is that a personal life policy, something through work, or something specifically for the mortgage?",
       session
     );
     return;
   }
 
-  if (activeId === "not_interested_coverage_check") {
-    const t = normalizeText(callerText);
-
-    if (
-      containsAny(t, [
-        "yes",
-        "yeah",
-        "i do",
-        "i have something",
-        "already covered",
-        "i already have coverage",
-        "i have life insurance",
-        "i have something through work",
-        "covered",
-        "i have insurance",
-        "i have a policy",
-        "i have coverage",
-        "i have something in place",
-        "i'm covered",
-        "im covered",
-      ])
-    ) {
-      session.waitingForObjectionBranch = false;
-      session.activeObjection = "existing_coverage_detail";
-      note(session, "has_existing_coverage", callerText);
-
-      sendVoice(
-        ws,
-        "Okay great, and is that a personal life policy, something through work, or something specifically for the mortgage?",
-        session
-      );
-      return;
-    }
-
-    if (
-      containsAny(t, [
-        "not concerned",
-        "don't care",
-        "dont care",
-        "do not care",
-        "not worried about it",
-        "close it out",
-        "just close it out",
-        "not really",
-        "no",
-      ])
-    ) {
-      session.shouldEndCall = true;
-      clearObjectionState(session);
-      setOutcome(session, "not_interested");
-      releaseHeldSlotForSession(session);
-      sendVoice(
-        ws,
-        "Okay no worries, I'll go ahead and close out your file. Thank you for your time.",
-        session
-      );
-      return;
-    }
-
+  if (
+    containsAny(t, [
+      "not concerned",
+      "don't care",
+      "dont care",
+      "do not care",
+      "not worried about it",
+      "close it out",
+      "just close it out",
+      "not really",
+      "no",
+    ])
+  ) {
+    session.shouldEndCall = true;
+    clearObjectionState(session);
+    setOutcome(session, "not_interested");
+    releaseHeldSlotForSession(session);
     sendVoice(
       ws,
-      "Just so I update it correctly, do you already have something in place, or are you just not concerned about it?",
+      "Okay no worries, I'll go ahead and close out your file. Thank you for your time.",
       session
     );
     return;
   }
+
+  sendVoice(
+    ws,
+    "Just so I update it correctly, do you already have something in place, or are you just not concerned about it?",
+    session
+  );
+  return;
+}
 
 async function handleCoverageTypeAnswer(ws, session, callerText) {
   note(session, "coverage_type_answer", callerText);
