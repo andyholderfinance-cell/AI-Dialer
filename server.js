@@ -3117,15 +3117,6 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
   return;
 }
     
-      session.activeObjection = "not_interested_coverage_check";
-      sendVoice(
-        ws,
-        "Okay, no worries. Before I close out the file, do you already have something in place for the home if something were to happen to you, or are you just not concerned about it?",
-        session
-      );
-      return;
-    }
-
     if (
       containsAny(t, [
         "still not interested",
