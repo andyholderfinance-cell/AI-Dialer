@@ -3287,18 +3287,6 @@ async function handleStepResponse(ws, session, callerText) {
   if (matchedObjection) {
     markObjection(session, matchedObjection, step.id);
 
-    if (shouldExitObjectionLoop(session)) {
-      session.shouldEndCall = true;
-      setOutcome(session, "too_many_objections");
-      releaseHeldSlotForSession(session);
-      sendVoice(
-        ws,
-        "No worries, it sounds like now may not be the best time to go over it. I'll let you go for now. Have a great day.",
-        session
-      );
-      return;
-    }
-
     if (matchedObjection.action === "end_call") {
       session.shouldEndCall = true;
       setOutcome(session, "do_not_call");
