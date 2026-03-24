@@ -492,6 +492,7 @@ const OBJECTION_LIBRARY = [
       ],
     branches: {
       cost_or_qualify: {
+        action: "handle_and_return",
         detect: [
           "cost",
           "price",
@@ -3344,6 +3345,25 @@ async function handleStepResponse(ws, session, callerText) {
     }
   }
 
+  const branch = objection.branches[branchKey];
+
+const responseLines =
+  typeof branch.response === "function"
+    ? branch.response(callerText)
+    : branch.response;
+
+const responseText = formatObjectionResponse(responseLines);
+
+sendVoice(ws, responseText, session);
+
+if (branchKey === "cost_or_qualify") {
+  session.waitingForObjectionBranch = false;
+
+  askPostObjectionFollowup(ws, session, "fair_enough", "cost");
+
+  return;
+}
+  
   if (detectPossibleUnknownObjection(text)) {
     note(session, "unknown_objection", callerText);
 
