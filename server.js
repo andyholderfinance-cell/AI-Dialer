@@ -3249,8 +3249,7 @@ if (activeId === "not_interested_coverage_check") {
     session
   );
   return;
-}
-}  
+} 
 
 async function handleCoverageTypeAnswer(ws, session, callerText) {
   note(session, "coverage_type_answer", callerText);
