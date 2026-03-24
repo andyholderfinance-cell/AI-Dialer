@@ -492,7 +492,6 @@ const OBJECTION_LIBRARY = [
       ],
     branches: {
       cost_or_qualify: {
-        action: "handle_and_return",
         detect: [
           "cost",
           "price",
@@ -3065,30 +3064,58 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
   if (activeId === "not_interested") {
     const t = normalizeText(callerText);
 
-    if (
-      containsAny(t, [
-        "cost",
-        "price",
-        "pricing",
-        "too expensive",
-        "qualify",
-        "qualification",
-        "i don't think i'd qualify",
-        "i dont think id qualify",
-        "wondering if i'd qualify",
-        "wondering if i would qualify",
-        "not sure i qualify",
-        "dont think i qualify",
-        "don't think i qualify",
-        "i probably wouldnt qualify",
-        "i probably wouldn't qualify",
-      ])
-    ) {
-      sendVoice(
-        ws,
-        "A lot of people feel that way initially. The underwriter will be able to go over that with you and show you what options are available.",
-        session
-      );
+   if (
+  containsAny(t, [
+    "cost",
+    "price",
+    "pricing",
+    "too expensive",
+    "qualify",
+    "qualification",
+    "i don't think i'd qualify",
+    "i dont think id qualify",
+    "wondering if i'd qualify",
+    "wondering if i would qualify",
+    "not sure i qualify",
+    "dont think i qualify",
+    "don't think i qualify",
+    "i probably wouldnt qualify",
+    "i probably wouldn't qualify",
+  ])
+) {
+  const isCost = containsAny(t, [
+    "cost",
+    "price",
+    "pricing",
+    "too expensive",
+  ]);
+
+  const responseText = formatObjectionResponse(
+    isCost
+      ? [
+          "Totally fair...",
+          "That’s actually why we set it up this way — the underwriter works with a bunch of A-rated companies,",
+          "so he can find whatever the most affordable option is for you.",
+          "And since the call’s free, worst case you just get clarity on your options and decide from there.",
+        ]
+      : [
+          "I completely understand...",
+          "That’s exactly why I’m calling — the underwriter works with multiple A-rated carriers,",
+          "so he can usually find something that fits based on your age and health.",
+        ]
+  );
+
+  sendVoice(ws, responseText, session);
+
+  session.waitingForObjectionBranch = false;
+  askPostObjectionFollowup(
+    ws,
+    session,
+    "fair_enough",
+    isCost ? "cost" : "qualify"
+  );
+  return;
+}
       session.activeObjection = "not_interested_coverage_check";
       sendVoice(
         ws,
