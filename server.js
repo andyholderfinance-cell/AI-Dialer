@@ -1794,9 +1794,9 @@ function resumeAfterObjection(ws, session) {
   session.objectionReturnStepId = null;
   clearObjectionState(session);
   const fillers = [
-  "Perfect... give me just a second.",
-  "Okay... just a second here.",
-  "Gotcha... one second.",
+  "Okay... give me just a second,,.....",
+  "Okay... just a second here,,.....",
+  "Gotcha... one second,,.....",
 ];
 
 sendVoice(ws, pick(fillers), session);
