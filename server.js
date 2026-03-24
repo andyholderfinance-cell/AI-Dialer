@@ -41,6 +41,22 @@ const openai = new OpenAI({
 const VOICE_STYLE_INSTRUCTIONS = `
 You are a human-sounding mortgage protection case worker and appointment setter.
 
+Pacing rules:
+- Pause slightly after commas
+- Pause after key thoughts
+- Do not rush sentences
+- Let statements breathe
+
+Delivery:
+- Speak like you're thinking while talking
+- Slight hesitation before important phrases
+- Emphasize words like "actually", "just", "worst case"
+
+Avoid:
+- sounding scripted
+- sounding too clean
+- sounding overly confident
+
 Your tone must sound:
 - calm
 - slow
@@ -85,7 +101,7 @@ const SCRIPT_STEPS = [
   {
     id: "intro_3",
     type: "statement",
-    text: "Okay, from what I'm seeing here, it was a request for information on the plan that would pay off your mortgage, or make those monthly payments for you if you were to become sick, disabled, or passed away. Its just showing up as incomplete or due for review.",
+    text: "Okay, from what I'm seeing here, it was a request for information on the plan that would pay off your mortgage, or make those monthly payments for you if you were to become sick, disabled, or passed away. Its just showing up as incomplete or due for review...",
   },
   {
     id: "intro_4",
@@ -135,7 +151,7 @@ const SCRIPT_STEPS = [
   {
     id: "underwriter_intro",
     type: "statement",
-    text: `Perfect. So, ${UNDERWRITER_NAME} is the underwriter for your county. He can go over the mortgage protection information with you, answer any questions, and pull up some options based on your needs.`,
+    text: `Perfect... So, ${UNDERWRITER_NAME} is the underwriter for your county. He can go over the mortgage protection information with you, answer any questions, and pull up some options based on your needs.`,
   },
   {
     id: "virtual_meeting",
@@ -145,7 +161,7 @@ const SCRIPT_STEPS = [
   {
     id: "calendar_check",
     type: "statement",
-    text: `Okay, give me just a moment while I check ${UNDERWRITER_NAME}'s calendar.`,
+    text: `Okay, give me just a moment while I check ${UNDERWRITER_NAME}'s calendar...`,
   },
   {
     id: "offer_times_today",
@@ -165,12 +181,12 @@ const SCRIPT_STEPS = [
   {
     id: "collect_email",
     type: "input",
-    text: "Perfect, what is a good email address for the appointment confirmation?",
+    text: "Okay, what is a good email address for the appointment confirmation?",
   },
   {
     id: "confirmation",
     type: "statement",
-    text: "Perfect, that should be all I need. You'll get an email and a text reminder for the appointment.",
+    text: "Awesome, that should be all I need. You'll get an email and a text reminder for the appointment.",
   },
   {
     id: "reminder_instruction",
@@ -283,8 +299,16 @@ const OBJECTION_LIBRARY = [
       "monthly payment",
     ],
     response: [
-      "The underwriter would be the one to show you the options, because that depends on your age, health, and what you want in place.",
-    ],
+  "Totally fair...",
+  "[PAUSE_1.5]",
+  "That’s actually why we set it up this way — the underwriter works with a bunch of A-rated companies,",
+  "[PAUSE_1]",
+  "so he can find whatever the most affordable option is for you.",
+  "[PAUSE_1.5]",
+  "And since the call’s free, worst case you just get clarity on your options and decide from there.",
+  "[PAUSE_1]",
+  "No harm in taking a quick look, right?"
+],
   },
   {
     id: "mandatory",
@@ -317,7 +341,7 @@ const OBJECTION_LIBRARY = [
       "what company is this",
     ],
     response: [
-      "I work under the underwriter assigned to the file. We are not tied to just one company.",
+      "I work with the underwriter assigned to the file. He is contracted with multiple carrier's within the state, so we aren't tied to just one company.",
     ],
   },
   {
@@ -336,7 +360,7 @@ const OBJECTION_LIBRARY = [
       "send it over",
     ],
     response: [
-      "I can send the appointment details, but the actual options depend on your age, health, and what you need, which is why we set the review.",
+      "I wish I could, that would make my job a lot easier, but the actual options depend on your age, health, and what you need, which is why we set the review with the underwriter.",
     ],
   },
   {
@@ -353,7 +377,7 @@ const OBJECTION_LIBRARY = [
       "is this a solicitation",
     ],
     response: [
-      "No, I'm not trying to sell you anything on this call. My job is just to verify the file and get you in front of the underwriter if you want to review it.",
+      "No, I'm not trying to sell you anything. My job is just to verify the file and get you appointed with the underwriter. Mortgage protection is something you have to apply for, it can't just be bought off the shelf, like a loaf of bread.",
     ],
   },
   {
@@ -378,7 +402,7 @@ const OBJECTION_LIBRARY = [
       "give me a call later",
     ],
     response: [
-      "Yea, of course. No decisions are being made on this call. I'm really just trying to find a better time for you.",
+      "Yea, of course. No decisions are being made on this call. I just need to find a time that works best for you to speak with the underwriter.",
     ],
   },
   {
@@ -415,8 +439,14 @@ const OBJECTION_LIBRARY = [
       "would i be approved",
     ],
     response: [
-      "A lot of people feel that way at first. That's exactly why the underwriter checks multiple options instead of just one.",
-    ],
+  "I completely understand...",
+  "[PAUSE_1.5]",
+  "That’s exactly why I’m calling — the underwriter works with multiple A-rated carriers,",
+  "[PAUSE_1]",
+  "so he can usually find something that fits based on your age and health.",
+  "[PAUSE_1.5]",
+  "No harm in taking a quick look, right?"
+],
   },
   {
     id: "no_mortgage",
@@ -437,8 +467,8 @@ const OBJECTION_LIBRARY = [
       "i own it outright",
     ],
     response: [
-      "Okay, no worries. Let me just note that here. Even if the mortgage is paid off, some people still review personal protection options depending on what they want it for.",
-    ],
+      'Okay, no worries let me just update your file here... Now, mortgage protection is something that follows you specifically. So in the event that you no longer have a mortgage, you would still be covered if something were to happen to you. Whether that be income replacement, or final expenses.'
+      ],
   },
   {
     id: "not_interested",
@@ -468,8 +498,12 @@ const OBJECTION_LIBRARY = [
       "i'll pass",
     ],
     response: [
-      "Okay, no problem. I just want to update the file correctly. Is that mainly because of cost, because you're not sure you'd qualify, or you just don't want to go over it?",
-    ],
+  "Gotcha...",
+  "[PAUSE_1]",
+  "just so I handle the file correctly — is that more because of cost,",
+  "[PAUSE_0.5]",
+  "or you're not sure you'd qualify?",
+      ],
     branches: {
       cost_or_qualify: {
         detect: [
@@ -1773,7 +1807,8 @@ function resumeAfterObjection(ws, session) {
   session.lastResolvedObjectionId = resolvedId;
   session.objectionReturnStepId = null;
   clearObjectionState(session);
-
+  sendVoice(ws, "Perfect... give me just a second.", session);
+  
   if (resolvedId === "no_mortgage") {
     session.lead.no_mortgage = "Yes";
     session.crm.no_mortgage = "Yes";
