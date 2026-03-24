@@ -4009,4 +4009,4 @@ server.listen(PORT, () => {
   console.log("Calendly Event Type:", CALENDLY_EVENT_TYPE_URI || null);
   console.log("Calendly API Key present:", Boolean(CALENDLY_API_KEY));
   console.log("Slot hold length ms:", SLOT_HOLD_MS);
-});
+});  
