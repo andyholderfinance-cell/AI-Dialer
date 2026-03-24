@@ -1807,7 +1807,13 @@ function resumeAfterObjection(ws, session) {
   session.lastResolvedObjectionId = resolvedId;
   session.objectionReturnStepId = null;
   clearObjectionState(session);
-  sendVoice(ws, "Perfect... give me just a second.", session);
+  const fillers = [
+  "Perfect... give me just a second.",
+  "Okay... just a second here.",
+  "Gotcha... one second.",
+];
+
+sendVoice(ws, pick(fillers), session);
   
   if (resolvedId === "no_mortgage") {
     session.lead.no_mortgage = "Yes";
