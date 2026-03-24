@@ -321,7 +321,7 @@ const OBJECTION_LIBRARY = [
       "is this necessary",
     ],
     response: [
-      "No, not at all. I'm just checking whether you were able to get something in place or if you still wanted to review it.",
+      "No, not at all. I'm just following up on the request that was sent in so that way the underwriter can go over those options with you.",
     ],
   },
   {
