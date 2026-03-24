@@ -1794,7 +1794,7 @@ function resumeAfterObjection(ws, session) {
   session.objectionReturnStepId = null;
   clearObjectionState(session);
   const fillers = [
-  "Okay... give me just a second,,.....",
+  "Great... give me just a second,,.....",
   "Okay... just a second here,,.....",
   "Gotcha... one second,,.....",
 ];
