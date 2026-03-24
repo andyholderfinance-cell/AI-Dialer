@@ -3064,7 +3064,7 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
   if (activeId === "not_interested") {
     const t = normalizeText(callerText);
 
-   if (
+  if (
   containsAny(t, [
     "cost",
     "price",
@@ -3116,6 +3116,7 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
   );
   return;
 }
+    
       session.activeObjection = "not_interested_coverage_check";
       sendVoice(
         ws,
