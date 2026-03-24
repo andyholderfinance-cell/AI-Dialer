@@ -1827,7 +1827,6 @@ function resumeAfterObjection(ws, session) {
   session.shouldEndCall = true;
   sendVoice(ws, "Okay perfect. Thank you for your time.", session);
 }
-  }
 
   if (returnStepId === "verify_address") {
     session.currentStepIndex = getStepIndexById("verify_loan");
