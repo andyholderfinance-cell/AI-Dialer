@@ -1366,23 +1366,6 @@ function buildPromptFromCurrentStep(session) {
   return parts.join(" ");
 }
 
-    idx += 1;
-
-  session.currentStepIndex = questionStepIndex;
-  return parts.join(" ");
-}
-
-function detectNo(text) {
-  const t = normalizeText(text);
-  return (
-    t.includes("no") ||
-    t.includes("nope") ||
-    t.includes("not really") ||
-    t.includes("that's not right") ||
-    t.includes("that is not right")
-  );
-}
-
 function detectYes(text) {
   const t = normalizeText(text);
   return (
