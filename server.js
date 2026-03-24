@@ -298,13 +298,9 @@ const OBJECTION_LIBRARY = [
     ],
     response: [
   "Totally fair...",
-  "[PAUSE_1.5_SECONDS]",
   "That’s actually why we set it up this way — the underwriter works with a bunch of A-rated companies,",
-  "[PAUSE_1_SECOND]",
   "so he can find whatever the most affordable option is for you.",
-  "[PAUSE_1.5_SECONDS]",
   "And since the call’s free, worst case you just get clarity on your options and decide from there.",
-  "[PAUSE_1_SECOND]",
 ],
   },
   {
@@ -437,11 +433,8 @@ const OBJECTION_LIBRARY = [
     ],
     response: [
   "I completely understand...",
-  "[PAUSE_1.5_SECONDS]",
   "That’s exactly why I’m calling — the underwriter works with multiple A-rated carriers,",
-  "[PAUSE_1_SECOND]",
   "so he can usually find something that fits based on your age and health.",
-  "[PAUSE_1.5_SECONDS]",
 ],
   },
   {
@@ -495,9 +488,7 @@ const OBJECTION_LIBRARY = [
     ],
     response: [
   "Gotcha...",
-  "[PAUSE_1]",
   "just so I handle the file correctly — is that more because of cost,",
-  "[PAUSE_0.5]",
   "or you're not sure you'd qualify?",
       ],
     branches: {
