@@ -1828,57 +1828,6 @@ function resumeAfterObjection(ws, session) {
   sendVoice(ws, "Okay perfect. Thank you for your time.", session);
 }
 
-  if (returnStepId === "verify_address") {
-    session.currentStepIndex = getStepIndexById("verify_loan");
-    sendVoice(
-      ws,
-      renderTemplate(getCurrentStep(session).text, session.lead),
-      session
-    );
-    return;
-  }
-
-  if (returnStepId === "verify_loan") {
-    session.currentStepIndex = getStepIndexById("verify_coborrower");
-    sendVoice(
-      ws,
-      renderTemplate(getCurrentStep(session).text, session.lead),
-      session
-    );
-    return;
-  }
-
-  if (returnStepId === "verify_coborrower") {
-    session.currentStepIndex = getStepIndexById("verify_age");
-    sendVoice(
-      ws,
-      renderTemplate(getCurrentStep(session).text, session.lead),
-      session
-    );
-    return;
-  }
-
-  if (returnStepId === "verify_age") {
-    session.currentStepIndex = getStepIndexById("underwriter_intro");
-    sendNextPrompt(ws, session);
-    return;
-  }
-
-  if (currentReturnIndex >= 0 && currentReturnIndex < SCRIPT_STEPS.length - 1) {
-    session.currentStepIndex = currentReturnIndex + 1;
-    sendNextPrompt(ws, session);
-    return;
-  }
-
-  if (moveToNextStep(session)) {
-    sendNextPrompt(ws, session);
-    return;
-  }
-
-  session.shouldEndCall = true;
-  sendVoice(ws, "Okay perfect. Thank you for your time.", session);
-}
-
 function countRecoverableObjections(session) {
   return session.objectionHistory.filter((id) => {
     const obj = OBJECTION_LIBRARY.find((o) => o.id === id);
