@@ -87,8 +87,8 @@ Tone rules:
 const SCRIPT_STEPS = [
   {
     id: "intro_1",
-    type: "question",
-    text: "Hey, is this {{first_name}}?",
+  type: "question",
+  text: "Hey {{first_name}}?... can you hear me okay?"
   },
   {
     id: "intro_2",
