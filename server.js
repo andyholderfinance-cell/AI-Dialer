@@ -210,23 +210,25 @@ const OBJECTION_LIBRARY = [
     action: "resume_script_next_step",
     triggers: [
       "what is this",
-      "what's this",
       "what is this about",
-      "what's this about",
-      "what are you talking about",
       "what is this regarding",
-      "what is this in reference to",
-      "why are you calling",
-      "why did you call",
       "what are you calling about",
-      "what is this for",
-      "what exactly is this",
-      "what is this call about",
-      "what are you referring to",
-      "what file",
-      "what do you mean",
-      "what is this in regards to",
+      "what is this in reference to",
+      "what do you want",
+      "what do you need",
+      "what is this concerning",
+      "what is this supposed to be",
+      "what are we talking about",
+      "what is this call regarding",
+      "what is the reason for the call",
+      "what's going on",
+      "what is this about exactly",
+      "why are you calling",
+      "what are you trying to do",
       "what is this all about",
+      "what's this about again",
+      "why did you call me",
+      "what is this for"
     ],
     response: [
       "Yea, this is just about the mortgage protection file tied to the home.",
@@ -239,16 +241,26 @@ const OBJECTION_LIBRARY = [
     category: "recoverable",
     action: "resume_script_next_step",
     triggers: [
-      "how did you get my information",
       "how did you get my info",
-      "how did you get this number",
-      "how did you get my number",
-      "where did you get my number",
-      "where did you get my information",
+      "how did you get my information",
       "where did you get my info",
-      "how do you have my information",
+      "where did you get my information",
+      "how did you get my number",
       "how do you have my number",
-      "where are you getting this from",
+      "how did you find me",
+      "where did you get this",
+      "where did you get my contact info",
+      "how did yall get my info",
+      "why do you have my information",
+      "where are you pulling this from",
+      "who gave you my number",
+      "how did you get ahold of me",
+      "why do you have my number",
+      "where did this come from",
+      "how are you connected to me",
+      "who gave you my information",
+      "where did yall get my number",
+      "how did you get this number"
     ],
     response: [
       "From what I'm seeing here, it was tied to the mortgage file from when the home was closed, and I'm just the case worker assigned to review it on my end.",
@@ -570,26 +582,28 @@ const OBJECTION_LIBRARY = [
   {
     id: "already_have_insurance",
     category: "recoverable",
-    action: "existing_coverage_branch",
+    action: "branch",
     triggers: [
       "i already have insurance",
-      "i already got this taken care of",
-      "i have something through work",
       "i already have life insurance",
-      "i'm already covered",
-      "im already covered",
-      "i already have something in place",
       "i already have coverage",
-      "i've already got coverage",
-      "ive already got coverage",
-      "i already handled that",
-      "i'm covered",
-      "im covered",
-      "i have insurance through work",
-      "i have a policy",
-      "i got life insurance",
-      "i'm good on insurance",
-      "im good on insurance",
+      "im already covered",
+      "i have a policy already",
+      "i already have a policy in place",
+      "im taken care of",
+      "im already protected",
+      "i already got that",
+      "ive already got something",
+      "i already have coverage for that",
+      "im set",
+      "i already handled that a while ago",
+      "i have enough insurance",
+      "i have it through work",
+      "i have insurance through my job",
+      "i already have life insurance through my job",
+      "i already have something for that",
+      "i already took care of that",
+      "i'm good on that"
     ],
     response: [
       "Okay great. Is that a personal policy, something through work, or something specifically set up for the mortgage?",
@@ -1397,6 +1411,29 @@ function detectZoomPreference(text) {
   return "";
 }
 
+function phraseMatch(input, trigger) {
+  const a = normalizeText(input);
+  const b = normalizeText(trigger);
+
+  if (!a || !b) return false;
+  if (a.includes(b) || b.includes(a)) return true;
+
+  const aWords = new Set(a.split(" "));
+  const bWords = b.split(" ").filter(Boolean);
+
+  if (bWords.length === 1) {
+    return aWords.has(bWords[0]);
+  }
+
+  let hits = 0;
+  for (const word of bWords) {
+    if (aWords.has(word)) hits++;
+  }
+
+  const ratio = hits / bWords.length;
+  return ratio >= 0.7;
+}
+
 function detectMorningAfternoon(text) {
   const t = normalizeText(text);
   if (t.includes("morning")) return "morning";
@@ -1410,8 +1447,7 @@ function detectObjection(text) {
 
   for (const objection of OBJECTION_LIBRARY) {
     for (const trigger of objection.triggers) {
-      const normalizedTrigger = normalizeText(trigger);
-      if (t.includes(normalizedTrigger) || normalizedTrigger.includes(t)) {
+      if (phraseMatch(t, trigger)) {
         return objection;
       }
     }
@@ -1419,7 +1455,6 @@ function detectObjection(text) {
 
   return null;
 }
-
 function formatObjectionResponse(lines) {
   return lines
     .map((line) => {
