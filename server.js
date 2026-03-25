@@ -2548,7 +2548,7 @@ async function getCalendlyAvailableTimes(eventTypeUri, timezone) {
 
   const collection = Array.isArray(data.collection) ? data.collection : [];
 
- return collection.slice(0, 20).map((slot) => {
+ return collection.slice(0, 100).map((slot) => {
     const utcTime = slot.start_time || slot.start || slot.time;
     return {
       raw: slot,
