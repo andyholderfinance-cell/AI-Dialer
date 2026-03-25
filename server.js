@@ -156,11 +156,6 @@ const SCRIPT_STEPS = [
     text: "... Now, ever since covid, we handle appointments by phone or Zoom. Which one do you prefer?",
   },
   {
-    id: "calendar_check",
-    type: "statement",
-    text: `Okay, give me just a moment while I check ${UNDERWRITER_NAME}'s calendar...`,
-  },
-  {
   id: "offer_day_choice",
   type: "booking",
   text: "Now, {{first_name}}, Would today or tomorrow be better for you?",
@@ -3766,29 +3761,27 @@ async function handleStepResponse(ws, session, callerText) {
       return;
     }
 
-    case "virtual_meeting": {
+   case "virtual_meeting": {
   session.lead.meeting_type = detectZoomPreference(text) || "Phone call";
   session.crm.meeting_type = session.lead.meeting_type;
   note(session, "meeting_type", session.lead.meeting_type);
 
-  session.currentStepIndex = getStepIndexById("calendar_check");
   sendVoice(
     ws,
-    renderTemplate(getCurrentStep(session).text, session.lead),
+    renderTemplate(
+      `Okay {{first_name}}, give me just a moment while I check ${UNDERWRITER_NAME}'s calendar...`,
+      session.lead
+    ),
     session
   );
-  return;
-}
 
-   case "calendar_check": {
   try {
     await primeCalendlySlots(session);
-
     session.currentStepIndex = getStepIndexById("offer_day_choice");
 
     sendVoice(
       ws,
-      "Okay, {{first_name}}, would today or tomorrow be better for you?",
+      renderTemplate("Would today or tomorrow be better for you, {{first_name}}?", session.lead),
       session
     );
   } catch (err) {
@@ -3796,7 +3789,7 @@ async function handleStepResponse(ws, session, callerText) {
 
     sendVoice(
       ws,
-      "Looks like I’m having trouble pulling up the calendar right now. We’ll follow up with you shortly.",
+      "Looks like I'm having trouble pulling up the calendar right now. We'll follow up with you shortly.",
       session
     );
 
@@ -3805,7 +3798,7 @@ async function handleStepResponse(ws, session, callerText) {
 
   return;
 }
-
+      
 case "offer_day_choice": {
   const direct = detectDirectBookingIntent(text);
 
