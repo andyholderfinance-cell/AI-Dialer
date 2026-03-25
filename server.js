@@ -683,6 +683,151 @@ const slotHolds = new Map();
  * ============================================================================
  */
 
+function isAffirmative(text) {
+  const t = normalizeText(text);
+  return containsAny(t, [
+    "yes",
+    "yeah",
+    "yep",
+    "sure",
+    "okay",
+    "ok",
+    "that works",
+    "works",
+    "perfect",
+    "sounds good",
+    "lets do it",
+    "let's do it",
+    "that is fine",
+    "fine",
+  ]);
+}
+
+function isNegative(text) {
+  const t = normalizeText(text);
+  return containsAny(t, [
+    "no",
+    "nope",
+    "not really",
+    "that wont work",
+    "that won't work",
+    "different time",
+    "something else",
+    "another time",
+  ]);
+}
+
+function slotLabel(slot) {
+  return `${slot.dayPhrase} at ${slot.localTime}`;
+}
+
+function clearBookingOfferState(session) {
+  session.offeredSlotOptions = [];
+  session.pendingConfirmationSlot = null;
+  session.awaitingSlotConfirmation = false;
+}
+
+function setBookingContext(session, day = "", daypart = "") {
+  if (day) {
+    session.chosenBookingDay = day;
+    session.lead.chosen_day = day;
+    session.bookingContext.day = day;
+  }
+
+  if (daypart) {
+    session.chosenBookingDaypart = daypart;
+    session.lead.chosen_daypart = daypart;
+    session.bookingContext.daypart = daypart;
+  }
+}
+
+function getAllUsableSlots(session) {
+  return filterHeldSlotsForSession(session.availableSlots, session);
+}
+
+function getSlotsForPreference(session, day = "", daypart = "") {
+  return getAllUsableSlots(session).filter((slot) => {
+    const dayOk = !day || slot.dayPhrase === day;
+    const daypartOk = !daypart || getDaypartForSlot(slot) === daypart;
+    return dayOk && daypartOk;
+  });
+}
+
+function pickInitialOfferSlots(session) {
+  const slots = getAllUsableSlots(session);
+
+  if (!slots.length) return [];
+
+  const today = slots.find((s) => s.dayPhrase === "today");
+  const tomorrow = slots.find(
+    (s) => s.dayPhrase === "tomorrow" && s.utcTime !== today?.utcTime
+  );
+
+  if (today && tomorrow) return [today, tomorrow];
+
+  return slots.slice(0, 2);
+}
+
+function chooseFromOfferedSlots(text, session) {
+  const slots = session.offeredSlotOptions || [];
+  if (!slots.length) return null;
+
+  const chosen = chooseSlotFromFilteredResponse(text, slots);
+  if (chosen) return chosen;
+
+  const t = normalizeText(text);
+
+  if (slots[0] && containsAny(t, ["first", "earlier", "sooner"])) {
+    return slots[0];
+  }
+
+  if (slots[1] && containsAny(t, ["second", "later"])) {
+    return slots[1];
+  }
+
+  if (slots.length === 1 && isAffirmative(text)) {
+    return slots[0];
+  }
+
+  return null;
+}
+
+function offerConcreteSlots(ws, session, slots, prefix = "") {
+  const cleanSlots = (slots || []).slice(0, 2);
+  session.offeredSlotOptions = cleanSlots;
+
+  if (!cleanSlots.length) {
+    sendVoice(
+      ws,
+      "It looks like I do not have anything open right this second. Let me grab your email and we’ll send over the next available time.",
+      session
+    );
+    session.currentStepIndex = getStepIndexById("collect_email");
+    return;
+  }
+
+  if (cleanSlots.length === 1) {
+    const msg = prefix
+      ? `${prefix} I have ${slotLabel(cleanSlots[0])}. Would that work for you?`
+      : `I have ${slotLabel(cleanSlots[0])}. Would that work for you?`;
+
+    sendVoice(ws, msg, session);
+    return;
+  }
+
+  const msg = prefix
+    ? `${prefix} I have ${slotLabel(cleanSlots[0])} or ${slotLabel(cleanSlots[1])}. Which works better for you?`
+    : `I have ${slotLabel(cleanSlots[0])} or ${slotLabel(cleanSlots[1])}. Which works better for you?`;
+
+  sendVoice(ws, msg, session);
+}
+
+function getAlternateDaypart(daypart) {
+  if (daypart === "morning") return "evening";
+  if (daypart === "evening") return "morning";
+  return "";
+}
+
 function humanize(text) {
   const fillers = [
     "…",
