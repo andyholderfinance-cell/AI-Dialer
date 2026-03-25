@@ -347,7 +347,6 @@ const OBJECTION_LIBRARY = [
   "what company do you represent",
   "what agency are you with",
   "who do you work with",
-  "who is this through"
 ],
     response: [
       "I work with the underwriter assigned to the file. He is contracted with multiple carrier's within the state, so we aren't tied to just one company.",
@@ -3474,7 +3473,8 @@ async function handleStepResponse(ws, session, callerText) {
   );
   if (relativeHandled) return;
 
-  const matchedObjection = detectObjection(text);
+  const matchedObjection =
+  step.id === "intro_1" ? null : detectObjection(text);
   if (matchedObjection) {
     markObjection(session, matchedObjection, step.id);
 
