@@ -3572,49 +3572,69 @@ async function handleStepResponse(ws, session, callerText) {
 
   switch (step.id) {
     case "intro_1": {
-      const t = normalizeText(text);
+  const t = normalizeText(text);
 
-      if (
-        containsAny(t, [
-          "yes",
-          "yeah",
-          "speaking",
-          "this is he",
-          "this is she",
-          "this is",
-          "who is this",
-          "who's this",
-          "whos this",
-          "hello",
-          "hi",
-          "hey",
-        ])
-      ) {
-        session.currentStepIndex = getStepIndexById("intro_2");
-        sendVoice(
-          ws,
-          renderTemplate(getCurrentStep(session).text, session.lead),
-          session
-        );
-        return;
-      }
+  const confirmedIdentity = containsAny(t, [
+    "yes",
+    "yeah",
+    "yep",
+    "speaking",
+    "this is he",
+    "this is she",
+    "this is",
+    "hello",
+    "hi",
+    "hey",
+  ]);
 
-      if (detectWrongPerson(text)) {
-        session.shouldEndCall = true;
-        setOutcome(session, "wrong_number");
-        releaseHeldSlotForSession(session);
-        sendVoice(ws, "Oh okay, sorry about that. Have a great day.", session);
-        return;
-      }
+  const asksWho = containsAny(t, [
+    "who is this",
+    "who s this",
+    "whos this",
+    "who are you",
+    "what is your name",
+    "what's your name",
+    "what was your name",
+  ]);
 
-      session.currentStepIndex = getStepIndexById("intro_2");
-      sendVoice(
-        ws,
-        renderTemplate(getCurrentStep(session).text, session.lead),
-        session
-      );
-      return;
-    }
+  if (confirmedIdentity) {
+    session.currentStepIndex = getStepIndexById("intro_2");
+
+    sendVoice(
+      ws,
+      renderTemplate(getCurrentStep(session).text, session.lead),
+      session
+    );
+    return;
+  }
+
+  if (detectWrongPerson(text)) {
+    session.shouldEndCall = true;
+    setOutcome(session, "wrong_number");
+    releaseHeldSlotForSession(session);
+    sendVoice(ws, "Oh okay, sorry about that. Have a great day.", session);
+    return;
+  }
+
+  if (asksWho) {
+    session.currentStepIndex = getStepIndexById("intro_2");
+
+    sendVoice(
+      ws,
+      renderTemplate(getCurrentStep(session).text, session.lead),
+      session
+    );
+    return;
+  }
+
+  session.currentStepIndex = getStepIndexById("intro_2");
+  sendVoice(
+    ws,
+    renderTemplate(getCurrentStep(session).text, session.lead),
+    session
+  );
+  return;
+}
 
     case "intro_2": {
       session.currentStepIndex = getStepIndexById("intro_3");
