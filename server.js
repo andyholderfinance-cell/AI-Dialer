@@ -161,20 +161,20 @@ const SCRIPT_STEPS = [
     text: `Okay, give me just a moment while I check ${UNDERWRITER_NAME}'s calendar...`,
   },
   {
-    id: "offer_times_today",
-    type: "booking",
-    text: "It looks like he has {{slot_1_day_phrase}} at {{time_option_1}} or {{time_option_2}}. Which works better for you?",
-  },
-  {
-    id: "offer_times_tomorrow",
-    type: "booking",
-    text: "No worries. Would tomorrow morning or afternoon be better?",
-  },
-  {
-    id: "offer_times_tomorrow_slots",
-    type: "booking",
-    text: "Okay, the next openings I have are {{slot_3_day_phrase}} at {{time_option_3}} or {{time_option_4}}. Which works better?",
-  },
+  id: "offer_day_choice",
+  type: "booking",
+  text: "Would today or tomorrow be better for you?",
+},
+{
+  id: "offer_daypart_choice",
+  type: "booking",
+  text: "Got it. Would morning or evening work better for you?",
+},
+{
+  id: "offer_exact_time",
+  type: "booking",
+  text: "What time works best {{chosen_day}} {{chosen_daypart}}?",
+},
   {
     id: "collect_email",
     type: "input",
@@ -582,7 +582,7 @@ const OBJECTION_LIBRARY = [
   {
     id: "already_have_insurance",
     category: "recoverable",
-    action: "branch",
+    action: "existing_coverage_branch",
     triggers: [
       "i already have insurance",
       "i already have life insurance",
@@ -1240,15 +1240,21 @@ function buildSessionFromLead(lead = {}) {
     booked_by: lead.booked_by || CALLER_NAME,
     lead_type: lead.lead_type || "aged",
     no_mortgage: "No",
-  };
+
+  chosen_day: "",
+  chosen_daypart: "",
+};
 
   return {
-    id: randomId(),
-    callSid: null,
-    lead: sessionLead,
+  id: randomId(),
+  callSid: null,
+  lead: sessionLead,
 
-    currentStepIndex: 0,
-    lastQuestionStepIndex: 0,
+  chosenBookingDay: "",
+  chosenBookingDaypart: "",
+
+  currentStepIndex: 0,
+  lastQuestionStepIndex: 0,
     
     resumeStepIndex: 0,
     pendingPromptStartStepId: null,
@@ -1434,11 +1440,68 @@ function phraseMatch(input, trigger) {
   return ratio >= 0.7;
 }
 
-function detectMorningAfternoon(text) {
+function detectTodayTomorrow(text) {
   const t = normalizeText(text);
-  if (t.includes("morning")) return "morning";
-  if (t.includes("afternoon")) return "afternoon";
+
+  if (containsAny(t, [
+    "today",
+    "this afternoon",
+    "this evening",
+    "tonight",
+    "today morning",
+    "today evening"
+  ])) {
+    return "today";
+  }
+
+  if (containsAny(t, ["tomorrow", "tmrw", "tmr"])) {
+    return "tomorrow";
+  }
+
   return "";
+}
+
+function detectMorningEvening(text) {
+  const t = normalizeText(text);
+
+  if (containsAny(t, [
+    "morning",
+    "am",
+    "early",
+    "earlier",
+    "start of the day",
+    "this morning",
+    "today morning",
+    "tomorrow morning"
+  ])) return "morning";
+
+  if (containsAny(t, [
+    "evening",
+    "pm",
+    "tonight",
+    "later",
+    "after work",
+    "later on",
+    "end of the day",
+    "this evening",
+    "today evening",
+    "tomorrow evening"
+  ])) return "evening";
+
+  return "";
+}
+
+function detectDirectBookingIntent(text) {
+  const day = detectTodayTomorrow(text);
+  const daypart = detectMorningEvening(text);
+  const timeCandidates = spokenWordsToTimeCandidates(text);
+
+  return {
+    day,
+    daypart,
+    hasTime: timeCandidates.length > 0,
+    timeCandidates,
+  };
 }
 
 function detectObjection(text) {
@@ -1455,6 +1518,7 @@ function detectObjection(text) {
 
   return null;
 }
+
 function formatObjectionResponse(lines) {
   return lines
     .map((line) => {
@@ -1683,14 +1747,12 @@ function buildShortRepeat(session) {
       session.lead
     ),
     virtual_meeting: "Do you prefer Zoom or a phone call?",
-    offer_times_today: renderTemplate(
-      "I have {{slot_1_day_phrase}} at {{time_option_1}} or {{time_option_2}}.",
-      session.lead
-    ),
-    offer_times_tomorrow_slots: renderTemplate(
-      "I have {{slot_3_day_phrase}} at {{time_option_3}} or {{time_option_4}}.",
-      session.lead
-    ),
+    offer_day_choice: "Would today or tomorrow be better for you?",
+    offer_daypart_choice: "Would morning or evening work better for you?",
+    offer_exact_time: renderTemplate(
+      "What time works best {{chosen_day}} {{chosen_daypart}}?",
+  session.lead
+),
     collect_email: "What is a good email address for the appointment confirmation?",
   };
 
@@ -2212,6 +2274,66 @@ function buildCandidateSlotList(session, pair = "first") {
   return filterHeldSlotsForSession(raw, session);
 }
 
+function getDaypartForSlot(slot) {
+  const local = safeString(slot.localTime).toLowerCase();
+  const match = local.match(/(\d{1,2}):(\d{2})\s*(am|pm)/i);
+
+  if (!match) return "";
+
+  const hour = Number(match[1]);
+  const ap = match[3].toLowerCase();
+
+  const hour24 =
+    ap === "pm" && hour !== 12
+      ? hour + 12
+      : ap === "am" && hour === 12
+      ? 0
+      : hour;
+
+  return hour24 < 12 ? "morning" : "evening";
+}
+
+function getFilteredSlots(session, day, daypart) {
+  const slots = filterHeldSlotsForSession(session.availableSlots, session);
+
+  return slots.filter((slot) => {
+    const dayOk = !day || slot.dayPhrase === day;
+    const daypartOk = !daypart || getDaypartForSlot(slot) === daypart;
+    return dayOk && daypartOk;
+  });
+}
+
+function chooseSlotFromFilteredResponse(text, slots) {
+  const t = normalizeText(text);
+  const compact = normalizeTimeForMatching(text);
+
+  if (!slots.length) return null;
+
+  for (const slot of slots) {
+    for (const variant of slotTimeVariants(slot)) {
+      if (variant && compact.includes(variant)) {
+        return slot;
+      }
+    }
+  }
+
+  const spokenCandidates = spokenWordsToTimeCandidates(text);
+  for (const slot of slots) {
+    if (slotMatchesCandidate(slot, spokenCandidates)) {
+      return slot;
+    }
+  }
+
+  if (
+    slots.length === 1 &&
+    containsAny(t, ["yes", "okay", "works", "sure", "fine"])
+  ) {
+    return slots[0];
+  }
+
+  return null;
+}
+
 function chooseSlotFromResponse(text, session, pair = "first") {
   const t = normalizeText(text);
   const compact = normalizeTimeForMatching(text);
@@ -2235,41 +2357,58 @@ function chooseSlotFromResponse(text, session, pair = "first") {
     }
   }
 
-  if (
-    a &&
-    containsAny(t, [
-      "first",
-      "earlier",
-      "earliest",
-      "the first one",
-      "the earlier one",
-    ])
-  ) {
-    return a;
-  }
+  if (a && containsAny(t, ["first", "earlier", "sooner"])) return a;
+  if (b && containsAny(t, ["second", "later"])) return b;
 
-  if (
-    b &&
-    containsAny(t, [
-      "second",
-      "later",
-      "latest",
-      "the second one",
-      "the later one",
-    ])
-  ) {
-    return b;
-  }
-
-  if (
-    a &&
-    !b &&
-    containsAny(t, ["yes", "okay", "that works", "works", "fine", "sure"])
-  ) {
+  if (a && !b && containsAny(t, ["yes", "okay", "works", "sure", "fine"])) {
     return a;
   }
 
   return null;
+}
+
+async function confirmChosenSlot(ws, session, chosen) {
+  const held = acquireSlotHold(session, chosen);
+
+  if (!held) {
+    const recovered = await offerFreshSlotsAfterHoldLoss(
+      ws,
+      session,
+      "That spot just got grabbed a second ago. Let me give you the next openings I still have."
+    );
+
+    if (!recovered) {
+      session.shouldEndCall = true;
+      setOutcome(session, "booking_failed_manual_followup");
+      session.crm.booking_status = "manual_followup_needed";
+      sendVoice(
+        ws,
+        "It looks like the calendar changed on me. We'll follow up with the updated times manually.",
+        session
+      );
+    }
+
+    return false;
+  }
+
+  session.pendingChosenSlot = chosen;
+  session.lead.scheduled_time = chosen.localTime;
+  session.lead.scheduled_time_utc = chosen.utcTime;
+
+  note(session, "slot_selected", chosen);
+
+  session.currentStepIndex = getStepIndexById("collect_email");
+
+  sendVoice(
+    ws,
+    `Perfect, I have you at ${chosen.localTime}. ${renderTemplate(
+      getCurrentStep(session).text,
+      session.lead
+    )}`,
+    session
+  );
+
+  return true;
 }
 
 function applySessionSlots(session) {
@@ -2364,7 +2503,7 @@ async function getCalendlyAvailableTimes(eventTypeUri, timezone) {
 
   const collection = Array.isArray(data.collection) ? data.collection : [];
 
-  return collection.slice(0, 8).map((slot) => {
+ return collection.slice(0, 20).map((slot) => {
     const utcTime = slot.start_time || slot.start || slot.time;
     return {
       raw: slot,
@@ -3258,7 +3397,7 @@ async function offerFreshSlotsAfterHoldLoss(ws, session, introLine = "") {
 
   try {
     await primeCalendlySlots(session, true);
-    session.currentStepIndex = getStepIndexById("offer_times_today");
+    session.currentStepIndex = getStepIndexById("offer_day_choice");
 
     if (introLine) {
       sendVoice(ws, introLine, session);
@@ -3585,16 +3724,18 @@ async function handleStepResponse(ws, session, callerText) {
     }
 
     case "virtual_meeting": {
-      session.lead.meeting_type = detectZoomPreference(text) || "Phone call";
-      session.crm.meeting_type = session.lead.meeting_type;
-      note(session, "meeting_type", session.lead.meeting_type);
+  session.lead.meeting_type = detectZoomPreference(text) || "Phone call";
+  session.crm.meeting_type = session.lead.meeting_type;
+  note(session, "meeting_type", session.lead.meeting_type);
 
-      session.currentStepIndex = getStepIndexById("calendar_check");
-      sendVoice(
-        ws,
-        renderTemplate(getCurrentStep(session).text, session.lead),
-        session
-      );
+  session.currentStepIndex = getStepIndexById("calendar_check");
+  sendVoice(
+    ws,
+    renderTemplate(getCurrentStep(session).text, session.lead),
+    session
+  );
+  return;
+}
 
       try {
         await primeCalendlySlots(session);
@@ -3643,143 +3784,160 @@ async function handleStepResponse(ws, session, callerText) {
       return;
     }
 
-    case "offer_times_today": {
-      if (
-        normalized.includes("tomorrow") ||
-        normalized.includes("not today") ||
-        normalized === "no"
-      ) {
-        releaseHeldSlotForSession(session);
-        session.currentStepIndex = getStepIndexById("offer_times_tomorrow");
-        sendVoice(
-          ws,
-          renderTemplate(getCurrentStep(session).text, session.lead),
-          session
-        );
-        return;
-      }
+   case "calendar_check": {
+  try {
+    await primeCalendlySlots(session);
 
-      const chosen = chooseSlotFromResponse(text, session, "first");
-      if (chosen) {
-        const held = acquireSlotHold(session, chosen);
+    session.currentStepIndex = getStepIndexById("offer_day_choice");
 
-        if (!held) {
-          const recovered = await offerFreshSlotsAfterHoldLoss(
-            ws,
-            session,
-            "That spot just got grabbed a second ago. Let me give you the next openings I still have."
-          );
-          if (!recovered) {
-            session.shouldEndCall = true;
-            setOutcome(session, "booking_failed_manual_followup");
-            session.crm.booking_status = "manual_followup_needed";
-            sendVoice(
-              ws,
-              "It looks like the calendar changed on me. We'll follow up with the updated times manually.",
-              session
-            );
-          }
-          return;
-        }
+    sendVoice(
+      ws,
+      "Would today or tomorrow be better for you?",
+      session
+    );
+  } catch (err) {
+    console.error("Calendly error:", err);
 
-        session.pendingChosenSlot = chosen;
-        session.pendingChosenSlotPair = "first";
-        session.lead.scheduled_time = chosen.localTime;
-        session.lead.scheduled_time_utc = chosen.utcTime;
+    sendVoice(
+      ws,
+      "Looks like I’m having trouble pulling up the calendar right now. We’ll follow up with you shortly.",
+      session
+    );
 
-        note(session, "slot_selected", chosen);
-        note(session, "slot_hold_acquired", {
-          utcTime: chosen.utcTime,
-          expiresInMs: SLOT_HOLD_MS,
-        });
+    session.shouldEndCall = true;
+  }
 
-        session.currentStepIndex = getStepIndexById("collect_email");
-        sendVoice(
-          ws,
-          `Perfect, I have you at ${chosen.localTime}. ${renderTemplate(
-            getCurrentStep(session).text,
-            session.lead
-          )}`,
-          session
-        );
-        return;
-      }
+  return;
+}
 
-      sendVoice(
-        ws,
-        `No problem. I have ${session.lead.slot_1_day_phrase} at ${session.lead.time_option_1} or ${session.lead.time_option_2}. Which works better for you?`,
-        session
-      );
+case "offer_day_choice": {
+  const direct = detectDirectBookingIntent(text);
+
+  if (direct.day) {
+    session.chosenBookingDay = direct.day;
+    session.lead.chosen_day = direct.day;
+  }
+
+  if (direct.daypart) {
+    session.chosenBookingDaypart = direct.daypart;
+    session.lead.chosen_daypart = direct.daypart;
+  }
+
+  // 🔥 FULL SENTENCE BOOKING
+  if (direct.day && direct.daypart && direct.hasTime) {
+    const filtered = getFilteredSlots(session, direct.day, direct.daypart);
+    const chosen = chooseSlotFromFilteredResponse(text, filtered);
+
+    if (chosen) {
+      await confirmChosenSlot(ws, session, chosen);
       return;
     }
+  }
 
-    case "offer_times_tomorrow": {
-      const pref = detectMorningAfternoon(text);
-      note(session, "tomorrow_preference", pref || callerText);
+  const day = detectTodayTomorrow(text);
 
-      session.currentStepIndex = getStepIndexById("offer_times_tomorrow_slots");
-      sendVoice(
-        ws,
-        renderTemplate(getCurrentStep(session).text, session.lead),
-        session
-      );
+  if (!day) {
+    sendVoice(ws, "Would today or tomorrow work better?", session);
+    return;
+  }
+
+  session.chosenBookingDay = day;
+  session.lead.chosen_day = day;
+
+  session.currentStepIndex = getStepIndexById("offer_daypart_choice");
+
+  sendVoice(ws, "Morning or evening works better?", session);
+  return;
+}
+
+case "offer_daypart_choice": {
+  const direct = detectDirectBookingIntent(text);
+
+  if (direct.day && !session.chosenBookingDay) {
+    session.chosenBookingDay = direct.day;
+    session.lead.chosen_day = direct.day;
+  }
+
+  if (direct.daypart) {
+    session.chosenBookingDaypart = direct.daypart;
+    session.lead.chosen_daypart = direct.daypart;
+  }
+
+  if (session.chosenBookingDay && direct.daypart && direct.hasTime) {
+    const filtered = getFilteredSlots(
+      session,
+      session.chosenBookingDay,
+      direct.daypart
+    );
+
+    const chosen = chooseSlotFromFilteredResponse(text, filtered);
+
+    if (chosen) {
+      await confirmChosenSlot(ws, session, chosen);
       return;
     }
+  }
 
-    case "offer_times_tomorrow_slots": {
-      const chosen = chooseSlotFromResponse(text, session, "second");
-      if (chosen) {
-        const held = acquireSlotHold(session, chosen);
+  const daypart = detectMorningEvening(text);
 
-        if (!held) {
-          const recovered = await offerFreshSlotsAfterHoldLoss(
-            ws,
-            session,
-            "That spot just got grabbed a second ago. Let me give you the next openings I still have."
-          );
-          if (!recovered) {
-            session.shouldEndCall = true;
-            setOutcome(session, "booking_failed_manual_followup");
-            session.crm.booking_status = "manual_followup_needed";
-            sendVoice(
-              ws,
-              "It looks like the calendar changed on me. We'll follow up with the updated times manually.",
-              session
-            );
-          }
-          return;
-        }
+  if (!daypart) {
+    sendVoice(ws, "Morning or evening works better?", session);
+    return;
+  }
 
-        session.pendingChosenSlot = chosen;
-        session.pendingChosenSlotPair = "second";
-        session.lead.scheduled_time = chosen.localTime;
-        session.lead.scheduled_time_utc = chosen.utcTime;
+  session.chosenBookingDaypart = daypart;
+  session.lead.chosen_daypart = daypart;
 
-        note(session, "slot_selected", chosen);
-        note(session, "slot_hold_acquired", {
-          utcTime: chosen.utcTime,
-          expiresInMs: SLOT_HOLD_MS,
-        });
+  session.currentStepIndex = getStepIndexById("offer_exact_time");
 
-        session.currentStepIndex = getStepIndexById("collect_email");
-        sendVoice(
-          ws,
-          `Perfect, I have you at ${chosen.localTime}. ${renderTemplate(
-            getCurrentStep(session).text,
-            session.lead
-          )}`,
-          session
-        );
-        return;
-      }
+  sendVoice(
+    ws,
+    `What time works best ${session.chosenBookingDay} ${session.chosenBookingDaypart}?`,
+    session
+  );
 
-      sendVoice(
-        ws,
-        `The next two times I have are ${session.lead.slot_3_day_phrase} at ${session.lead.time_option_3} or ${session.lead.time_option_4}. Which works better for you?`,
-        session
-      );
-      return;
-    }
+  return;
+}
+
+case "offer_exact_time": {
+  const direct = detectDirectBookingIntent(text);
+
+  const day = direct.day || session.chosenBookingDay;
+  const daypart = direct.daypart || session.chosenBookingDaypart;
+
+  const filtered = getFilteredSlots(session, day, daypart);
+  const chosen = chooseSlotFromFilteredResponse(text, filtered);
+
+  if (chosen) {
+    await confirmChosenSlot(ws, session, chosen);
+    return;
+  }
+
+if (!filtered.length) {
+  const otherDaypart = daypart === "morning" ? "evening" : "morning";
+
+  sendVoice(
+    ws,
+    `I'm not seeing anything open ${day} ${daypart}. Would ${otherDaypart} work better?`,
+    session
+  );
+
+  return;
+}
+
+  const options = filtered
+    .slice(0, 3)
+    .map((s) => s.localTime)
+    .join(", ");
+
+  sendVoice(
+    ws,
+    `I have ${options} ${day} ${daypart}. What works best for you?`,
+    session
+  );
+
+  return;
+}
 
     case "collect_email": {
       extendSlotHold(session);
