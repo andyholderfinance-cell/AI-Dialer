@@ -103,7 +103,7 @@ const SCRIPT_STEPS = [
   {
     id: "intro_4",
     type: "question",
-    text: `so they just have me verify the information and get you appointed with the state underwriter, so he can go over your options. Does that make sense {{first_name}}?`,
+    text: `so they just have me verify the information and get you appointed with the state underwriter, so he can go over your options. Does that make sense?`,
   },
   {
     id: "verify_intro",
