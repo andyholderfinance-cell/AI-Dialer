@@ -1953,8 +1953,10 @@ function buildShortRepeat(session) {
       session.lead
     ),
     verify_age: renderTemplate(
+
       "I have your age as {{age}}. Is that still correct?",
       session.lead
+ 
     ),
     virtual_meeting: "Do you prefer Zoom or a phone call?",
     offer_day_choice: "Would today or tomorrow be better for you?",
@@ -3208,6 +3210,117 @@ app.get("/session/:leadId", (req, res) => {
  * ============================================================================
  */
 
+async function handleBookingStep(ws, session, callerText) {
+  const text = safeString(callerText);
+  const direct = detectDirectBookingIntent(text);
+
+  if (direct.day) {
+    setBookingContext(session, direct.day, "");
+  }
+
+  if (direct.daypart) {
+    setBookingContext(session, "", direct.daypart);
+  }
+
+  // 1) User picked from currently offered slots
+  const offeredChoice = chooseFromOfferedSlots(text, session);
+  if (offeredChoice) {
+    clearBookingOfferState(session);
+    await confirmChosenSlot(ws, session, offeredChoice);
+    return;
+  }
+
+  // 2) Full natural language request like:
+  // "tomorrow evening at 5:30"
+  const day = direct.day || session.chosenBookingDay || session.bookingContext.day;
+  const daypart =
+    direct.daypart ||
+    session.chosenBookingDaypart ||
+    session.bookingContext.daypart;
+
+  if (direct.hasTime) {
+    const filtered = getSlotsForPreference(session, day, daypart);
+
+    const exact = chooseSlotFromFilteredResponse(text, filtered);
+    if (exact) {
+      clearBookingOfferState(session);
+      await confirmChosenSlot(ws, session, exact);
+      return;
+    }
+
+    if (filtered.length) {
+      const closest = findClosestSlot(text, filtered);
+
+      if (closest) {
+        session.pendingConfirmationSlot = closest;
+        session.awaitingSlotConfirmation = true;
+
+        sendVoice(
+          ws,
+          `The closest I have is ${slotLabel(closest)}. Would that work for you?`,
+          session
+        );
+        return;
+      }
+    }
+  }
+
+  // 3) User gave day/daypart preference only
+  if (day || daypart) {
+    const preferred = getSlotsForPreference(session, day, daypart);
+
+    if (preferred.length) {
+      offerConcreteSlots(ws, session, preferred);
+      return;
+    }
+
+    if (day && daypart) {
+      const altDaypart = getAlternateDaypart(daypart);
+      const alternate = getSlotsForPreference(session, day, altDaypart);
+
+      if (alternate.length) {
+        setBookingContext(session, day, altDaypart);
+        offerConcreteSlots(
+          ws,
+          session,
+          alternate,
+          `I’m not seeing anything open ${day} ${daypart},`
+        );
+        return;
+      }
+    }
+
+    const fallback = getAllUsableSlots(session);
+    if (fallback.length) {
+      offerConcreteSlots(
+        ws,
+        session,
+        fallback,
+        "I’m not seeing anything open in that exact window,"
+      );
+      return;
+    }
+
+    sendVoice(
+      ws,
+      "It looks like nothing is showing open right now. Let me grab your email and we’ll send over the next available time.",
+      session
+    );
+    session.currentStepIndex = getStepIndexById("collect_email");
+    return;
+  }
+
+  // 4) No usable answer yet -> repeat concrete options
+  const currentOffered = session.offeredSlotOptions || [];
+  if (currentOffered.length) {
+    offerConcreteSlots(ws, session, currentOffered, "Just so I give you a real option,");
+    return;
+  }
+
+  const initial = pickInitialOfferSlots(session);
+  offerConcreteSlots(ws, session, initial);
+}
+
 async function handleConversationStart(ws, session) {
   session.scriptStarted = false;
   maybeStartWithLeadType(session);
@@ -3960,19 +4073,18 @@ async function handleStepResponse(ws, session, callerText) {
 
   try {
     await primeCalendlySlots(session);
+    clearBookingOfferState(session);
+
+    const initialSlots = pickInitialOfferSlots(session);
     session.currentStepIndex = getStepIndexById("offer_day_choice");
 
-    sendVoice(
-      ws,
-      renderTemplate("Would today or tomorrow be better for you, {{first_name}}?", session.lead),
-      session
-    );
+    offerConcreteSlots(ws, session, initialSlots);
   } catch (err) {
     console.error("Calendly error:", err);
 
     sendVoice(
       ws,
-      "Looks like I'm having trouble pulling up the calendar right now. We'll follow up with you shortly.",
+      "Looks like I'm having trouble pulling up the calendar right now. We’ll follow up with you shortly.",
       session
     );
 
@@ -3982,192 +4094,10 @@ async function handleStepResponse(ws, session, callerText) {
   return;
 }
       
-case "offer_day_choice": {
-  const direct = detectDirectBookingIntent(text);
-
-  if (direct.day) {
-    session.chosenBookingDay = direct.day;
-    session.lead.chosen_day = direct.day;
-  }
-
-  if (direct.daypart) {
-    session.chosenBookingDaypart = direct.daypart;
-    session.lead.chosen_daypart = direct.daypart;
-  }
-
-  // 🔥 FULL SENTENCE BOOKING
-  if (direct.day && direct.daypart && direct.hasTime) {
-    const filtered = getFilteredSlots(session, direct.day, direct.daypart);
-    const chosen = chooseSlotFromFilteredResponse(text, filtered);
-
-if (!chosen && direct.hasTime && filtered.length) {
-  const closest = findClosestSlot(text, filtered);
-
-  if (closest) {
-    sendVoice(
-      ws,
-      `The closest I have is ${closest.localTime}. Would that work for you?`,
-      session
-    );
-
-    session.pendingChosenSlot = closest;
-    return;
-  }
-}    
-    
-    if (chosen) {
-      await confirmChosenSlot(ws, session, chosen);
-      return;
-    }
-  }
-
-  const day = detectTodayTomorrow(text);
-
-  if (!day) {
-    sendVoice(ws, "Okay, {{first_name}}, would today or tomorrow work better?", session);
-    return;
-  }
-
-  session.chosenBookingDay = day;
-  session.lead.chosen_day = day;
-
-  session.currentStepIndex = getStepIndexById("offer_daypart_choice");
-
-  sendVoice(ws, "And do you prefer mornings or in the evening?", session);
-  return;
-}
-
-case "offer_daypart_choice": {
-  const direct = detectDirectBookingIntent(text);
-
-  if (direct.day && !session.chosenBookingDay) {
-    session.chosenBookingDay = direct.day;
-    session.lead.chosen_day = direct.day;
-  }
-
-  if (direct.daypart) {
-    session.chosenBookingDaypart = direct.daypart;
-    session.lead.chosen_daypart = direct.daypart;
-  }
-
-  if (session.chosenBookingDay && direct.daypart && direct.hasTime) {
-    const filtered = getFilteredSlots(
-      session,
-      session.chosenBookingDay,
-      direct.daypart
-    );
-
-    const chosen = chooseSlotFromFilteredResponse(text, filtered);
-
-    if (chosen) {
-      await confirmChosenSlot(ws, session, chosen);
-      return;
-    }
-  }
-
-  const daypart = detectMorningEvening(text);
-
-  if (!daypart) {
-    sendVoice(ws, "And do you prefer mornings or in the evening?", session);
-    return;
-  }
-
-  session.chosenBookingDaypart = daypart;
-  session.lead.chosen_daypart = daypart;
-
-  session.currentStepIndex = getStepIndexById("offer_exact_time");
-
-  sendVoice(
-    ws,
-    `Great, what time works best ${session.chosenBookingDay} ${session.chosenBookingDaypart}?`,
-    session
-  );
-
-  return;
-}
-
+case "offer_day_choice":
+case "offer_daypart_choice":
 case "offer_exact_time": {
-  const direct = detectDirectBookingIntent(text);
-
-  if (direct.day) {
-    session.chosenBookingDay = direct.day;
-    session.lead.chosen_day = direct.day;
-  }
-
-  if (direct.daypart) {
-    session.chosenBookingDaypart = direct.daypart;
-    session.lead.chosen_daypart = direct.daypart;
-  }
-
-  const day = session.chosenBookingDay || "tomorrow";
-  const daypart = session.chosenBookingDaypart || "";
-  const filtered = getFilteredSlots(session, day, daypart);
-  const chosen = chooseSlotFromFilteredResponse(text, filtered);
-
-  if (chosen) {
-    await confirmChosenSlot(ws, session, chosen);
-    return;
-  }
-
-  if (!filtered.length) {
-    const otherDaypart = daypart === "morning" ? "evening" : "morning";
-    const alternateSlots = getFilteredSlots(session, day, otherDaypart);
-
-    // If the other daypart actually has slots, offer that once
-    if (alternateSlots.length) {
-      session.chosenBookingDaypart = otherDaypart;
-      session.lead.chosen_daypart = otherDaypart;
-
-      const options = alternateSlots
-        .slice(0, 3)
-        .map((s) => s.localTime)
-        .join(", ");
-
-      sendVoice(
-        ws,
-        `I'm not seeing anything open ${day} ${daypart}, but I do have ${options} ${day} ${otherDaypart}. What works best for you?`,
-        session
-      );
-      return;
-    }
-
-    // If BOTH dayparts are empty, stop flipping back and forth
-    const fallbackSlots = filterHeldSlotsForSession(session.availableSlots, session);
-
-    if (!fallbackSlots.length) {
-      sendVoice(
-        ws,
-        "It looks like nothing is showing open on the calendar right now. Let me grab your email and we’ll send over the next available time.",
-        session
-      );
-      session.currentStepIndex = getStepIndexById("collect_email");
-      return;
-    }
-
-    const fallbackOptions = fallbackSlots
-      .slice(0, 3)
-      .map((s) => `${s.dayPhrase} at ${s.localTime}`)
-      .join(", ");
-
-    sendVoice(
-      ws,
-      `I'm not seeing anything open ${day} ${daypart}. The next openings I do have are ${fallbackOptions}. Which one works best for you?`,
-      session
-    );
-    return;
-  }
-
-  const options = filtered
-    .slice(0, 3)
-    .map((s) => s.localTime)
-    .join(", ");
-
-  sendVoice(
-    ws,
-    `I have ${options} ${day} ${daypart}. What works best for you?`,
-    session
-  );
-
+  await handleBookingStep(ws, session, callerText);
   return;
 }
 
