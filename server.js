@@ -1758,12 +1758,12 @@ function getClarifyingFollowupForStep(stepId) {
     never_filled_anything_out:
       "A lot of people do not remember because it may have been tied to the home closing a while back.",
     unknown:
-      "I'm just trying to make sure I'm looking at the right file and explaining it clearly on my end.",
+      "I'm just making sure I'm looking at the right file and explaining it clearly on my end.",
   };
 
   return (
     map[stepId] ||
-    "I'm just trying to make sure I'm looking at the right file and explaining it clearly on my end."
+    "I'm just making sure I'm looking at the right file and explaining it clearly on my end."
   );
 }
 
@@ -1778,7 +1778,7 @@ function buildShortRepeat(session) {
     ),
     intro_3:
       "From what I'm seeing, the mortgage protection request tied to the home never got fully reviewed on my end.",
-    intro_4: `My job is just to verify the information and get you lined up with ${UNDERWRITER_NAME} if you want to go over it.`,
+    intro_4: `My job is just to verify the information and get you lined up with ${UNDERWRITER_NAME} so you guys can go over it.`,
     verify_address: renderTemplate(
       "I have your address as {{address}}. Is that correct?",
       session.lead
@@ -1793,7 +1793,7 @@ function buildShortRepeat(session) {
     ),
     virtual_meeting: "Do you prefer Zoom or a phone call?",
     offer_day_choice: "Would today or tomorrow be better for you?",
-    offer_daypart_choice: "Would morning or evening work better for you?",
+    offer_daypart_choice: "Do you prefer mornings or in the evening?",
     offer_exact_time: renderTemplate(
       "What time works best {{chosen_day}} {{chosen_daypart}}?",
   session.lead
@@ -1958,9 +1958,9 @@ function resumeAfterObjection(ws, session) {
   clearObjectionState(session);
 
   const fillers = [
-    "Perfect... give me just a second.",
-    "Okay... just a second here.",
-    "Gotcha... one second.",
+    "Perfect,... give me just a second,.....",
+    "Okay,... just a second here,.....",
+    "Gotcha,... one second,.....",
   ];
 
   sendVoice(ws, pick(fillers), session);
@@ -2790,11 +2790,11 @@ Lead: ${JSON.stringify(session.lead)}
 
     return (
       aiResponse.output_text ||
-      "Okay, I'm just trying to make sure I'm looking at the right file here."
+      "Okay, let me see if I have the correct information here."
     );
   } catch (error) {
     console.error("Fallback AI error:", error);
-    return "Okay, I'm just trying to make sure I'm looking at the right file here.";
+    return "Okay, let me see if I have the correct information here.";
   }
 }
 
@@ -2857,11 +2857,11 @@ Lead info: ${JSON.stringify(session.lead)}
 
     return (
       aiResponse.output_text ||
-      "I got you, I'm just trying to make sure I'm looking at the right file here."
+      "I got you, let me just make sure I have the correct information here."
     );
   } catch (error) {
     console.error("Unknown objection AI error:", error);
-    return "I got you, I'm just trying to make sure I'm looking at the right file here.";
+    return "I got you, let me just make sure I have the correct information here";
   }
 }
 
@@ -2934,7 +2934,7 @@ app.post("/voice", (req, res) => {
     <ConversationRelay
       url="wss://${host}/conversationrelay?leadId=${leadId}"
       ttsProvider="ElevenLabs"
-      voice="BVA1oNX6xZt6o7QaUwxr-flash_v2_5-0.85_0.75_0.80"
+      voice="GlLKN8gKPpScsRIImeN1-flash_v2_5-0.85_0.75_0.80"
       language="en-US"
       ttsLanguage="en-US"
     />
@@ -3287,13 +3287,11 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
             "That’s actually why we set it up this way — the underwriter works with a bunch of A-rated companies,",
             "so he can find whatever the most affordable option is for you.",
             "And since the call’s free, worst case you just get clarity on your options and decide from there.",
-            "No harm in taking a quick look",
           ]
         : [
             "I completely understand...",
             "That’s exactly why I’m calling — the underwriter works with multiple A-rated carriers,",
             "so he can usually find something that fits based on your age and health.",
-            "No harm in taking a quick look",
           ]
     );
 
@@ -3573,7 +3571,7 @@ async function handleStepResponse(ws, session, callerText) {
 
     const freestyleReply = await getUnknownObjectionReply(session, callerText);
     sendVoice(ws, freestyleReply, session);
-    sendVoice(ws, `${recenterLine()} the right file here.`, session);
+    sendVoice(ws, `${recenterLine()} ..., give me one second here`, session);
     return;
   }
 
@@ -3790,7 +3788,7 @@ async function handleStepResponse(ws, session, callerText) {
 
     sendVoice(
       ws,
-      "Would today or tomorrow be better for you?",
+      "Okay, {{first_name}}, would today or tomorrow be better for you?",
       session
     );
   } catch (err) {
@@ -3850,7 +3848,7 @@ if (!chosen && direct.hasTime && filtered.length) {
   const day = detectTodayTomorrow(text);
 
   if (!day) {
-    sendVoice(ws, "Would today or tomorrow work better?", session);
+    sendVoice(ws, "Okay, {{first_name}}, would today or tomorrow work better?", session);
     return;
   }
 
@@ -3859,7 +3857,7 @@ if (!chosen && direct.hasTime && filtered.length) {
 
   session.currentStepIndex = getStepIndexById("offer_daypart_choice");
 
-  sendVoice(ws, "Morning or evening works better?", session);
+  sendVoice(ws, "And do you prefer mornings or in the evening?", session);
   return;
 }
 
@@ -3894,7 +3892,7 @@ case "offer_daypart_choice": {
   const daypart = detectMorningEvening(text);
 
   if (!daypart) {
-    sendVoice(ws, "Morning or evening works better?", session);
+    sendVoice(ws, "And do you prefer mornings or in the evening?", session);
     return;
   }
 
@@ -3905,7 +3903,7 @@ case "offer_daypart_choice": {
 
   sendVoice(
     ws,
-    `What time works best ${session.chosenBookingDay} ${session.chosenBookingDaypart}?`,
+    `Great, what time works best ${session.chosenBookingDay} ${session.chosenBookingDaypart}?`,
     session
   );
 
