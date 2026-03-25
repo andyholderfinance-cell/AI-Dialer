@@ -4316,6 +4316,15 @@ wss.on("connection", (ws, req) => {
           return;
         }
 
+        if (session.awaitingSlotConfirmation) {
+          const handledPending = await handlePendingSlotConfirmation(
+          ws,
+          session,
+          callerText
+        );
+        if (handledPending) return;
+        }
+        
         if (session.awaitingCallbackTime) {
           await handleCallbackCapture(ws, session, callerText);
           return;
