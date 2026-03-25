@@ -1691,10 +1691,6 @@ function getClarifyingFollowupForStep(stepId) {
       "The underwriter would be the one to show the options, since that depends on your age and health.",
     mandatory:
       "No, you do not have to get it. I'm just checking whether you were able to get something in place.",
-    who_do_you_work_FOR:
-      "I work under the underwriter assigned to the file, so we are not tied to just one company.",
-    who_do_you_WORK_for:
-      "I work under the underwriter assigned to the file, so we are not tied to just one company.",
     who_do_you_work_for:
       "I work under the underwriter assigned to the file, so we are not tied to just one company.",
     email_it:
