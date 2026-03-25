@@ -103,12 +103,12 @@ const SCRIPT_STEPS = [
   {
     id: "intro_4",
     type: "question",
-    text: `... so they just have me verify the information and get you appointed with the state underwriter, so he can go over your options. Does that make sense?`,
+    text: `so they just have me verify the information and get you appointed with the state underwriter, so he can go over your options. Does that make sense {{first_name}}?`,
   },
   {
     id: "verify_intro",
     type: "statement",
-    text: "Perfect, I just need to verify a couple things so I know I'm looking at the right file.",
+    text: "Okay, perfect, I just need to verify a few things so I know I'm looking at the right file.",
   },
   {
     id: "verify_address",
@@ -153,7 +153,7 @@ const SCRIPT_STEPS = [
   {
     id: "virtual_meeting",
     type: "question",
-    text: "... Now, ever since covid, we handle appointments by phone or Zoom. Which one do you prefer?",
+    text: "... Now, ever since covid, we do handle appointments by phone or Zoom..., Which one do you prefer?",
   },
   {
   id: "offer_day_choice",
@@ -173,7 +173,7 @@ const SCRIPT_STEPS = [
   {
     id: "collect_email",
     type: "input",
-    text: "Alright, and what is a good email address for the appointment confirmation?",
+    text: "Alright {{first_name}}, and what is a good email address for the appointment confirmation?",
   },
   {
     id: "confirmation",
@@ -188,7 +188,7 @@ const SCRIPT_STEPS = [
   {
     id: "closing",
     type: "statement",
-    text: `...So, ${UNDERWRITER_NAME} will call you at {{scheduled_time}}. Thank you, and enjoy the rest of your day.`,
+    text: `Okay {{first_name}} that is all for this call..., ${UNDERWRITER_NAME} will call you at {{scheduled_time}}. Thank you, and enjoy the rest of your day.`,
   },
 ];
 
