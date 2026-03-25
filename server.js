@@ -3883,15 +3883,47 @@ case "offer_exact_time": {
 
   if (!filtered.length) {
     const otherDaypart = daypart === "morning" ? "evening" : "morning";
+    const alternateSlots = getFilteredSlots(session, day, otherDaypart);
 
-    if (direct.daypart && direct.daypart !== daypart) {
-      session.chosenBookingDaypart = direct.daypart;
-      session.lead.chosen_daypart = direct.daypart;
+    // If the other daypart actually has slots, offer that once
+    if (alternateSlots.length) {
+      session.chosenBookingDaypart = otherDaypart;
+      session.lead.chosen_daypart = otherDaypart;
+
+      const options = alternateSlots
+        .slice(0, 3)
+        .map((s) => s.localTime)
+        .join(", ");
+
+      sendVoice(
+        ws,
+        `I'm not seeing anything open ${day} ${daypart}, but I do have ${options} ${day} ${otherDaypart}. What works best for you?`,
+        session
+      );
+      return;
     }
+
+    // If BOTH dayparts are empty, stop flipping back and forth
+    const fallbackSlots = filterHeldSlotsForSession(session.availableSlots, session);
+
+    if (!fallbackSlots.length) {
+      sendVoice(
+        ws,
+        "It looks like nothing is showing open on the calendar right now. Let me grab your email and we’ll send over the next available time.",
+        session
+      );
+      session.currentStepIndex = getStepIndexById("collect_email");
+      return;
+    }
+
+    const fallbackOptions = fallbackSlots
+      .slice(0, 3)
+      .map((s) => `${s.dayPhrase} at ${s.localTime}`)
+      .join(", ");
 
     sendVoice(
       ws,
-      `I'm not seeing anything open ${day} ${daypart}. Would ${otherDaypart} work better?`,
+      `I'm not seeing anything open ${day} ${daypart}. The next openings I do have are ${fallbackOptions}. Which one works best for you?`,
       session
     );
     return;
