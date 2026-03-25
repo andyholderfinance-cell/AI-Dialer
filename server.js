@@ -683,6 +683,22 @@ const slotHolds = new Map();
  * ============================================================================
  */
 
+function humanize(text) {
+  const fillers = [
+    "…",
+    "uh,",
+    "um,",
+    "let me see…",
+    "just a second…"
+  ];
+
+  if (Math.random() < 0.25) {
+    return `${pick(fillers)} ${text}`;
+  }
+
+  return text;
+}
+
 function findClosestSlot(targetTimeText, slots) {
   const candidates = spokenWordsToTimeCandidates(targetTimeText);
 
@@ -1589,8 +1605,12 @@ function sendVoice(ws, text, session = null, options = {}) {
     }
   }
 
+  const shouldHumanize = !options?.skipHumanize;
+
+  const finalText = shouldHumanize ? humanize(text) : text;
+
   if (ws.readyState === WebSocket.OPEN) {
-    ws.send(buildVoiceMessage(text));
+    ws.send(buildVoiceMessage(finalText));
   }
 }
 
@@ -1950,14 +1970,6 @@ function resumeAfterObjection(ws, session) {
   session.pendingPromptEndStepId = null;
 
   clearObjectionState(session);
-
-  const fillers = [
-    "Perfect,... give me just a second,.....",
-    "Okay,... just a second here,.....",
-    "Gotcha,... one second,.....",
-  ];
-
-  sendVoice(ws, pick(fillers), session);
 
   if (returnIndex !== null && returnIndex >= 0) {
     session.currentStepIndex = returnIndex;
