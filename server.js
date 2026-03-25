@@ -3861,9 +3861,18 @@ case "offer_daypart_choice": {
 case "offer_exact_time": {
   const direct = detectDirectBookingIntent(text);
 
-  const day = direct.day || session.chosenBookingDay;
-  const daypart = direct.daypart || session.chosenBookingDaypart;
+  if (direct.day) {
+    session.chosenBookingDay = direct.day;
+    session.lead.chosen_day = direct.day;
+  }
 
+  if (direct.daypart) {
+    session.chosenBookingDaypart = direct.daypart;
+    session.lead.chosen_daypart = direct.daypart;
+  }
+
+  const day = session.chosenBookingDay || "tomorrow";
+  const daypart = session.chosenBookingDaypart || "";
   const filtered = getFilteredSlots(session, day, daypart);
   const chosen = chooseSlotFromFilteredResponse(text, filtered);
 
@@ -3872,17 +3881,21 @@ case "offer_exact_time": {
     return;
   }
 
-if (!filtered.length) {
-  const otherDaypart = daypart === "morning" ? "evening" : "morning";
+  if (!filtered.length) {
+    const otherDaypart = daypart === "morning" ? "evening" : "morning";
 
-  sendVoice(
-    ws,
-    `I'm not seeing anything open ${day} ${daypart}. Would ${otherDaypart} work better?`,
-    session
-  );
+    if (direct.daypart && direct.daypart !== daypart) {
+      session.chosenBookingDaypart = direct.daypart;
+      session.lead.chosen_daypart = direct.daypart;
+    }
 
-  return;
-}
+    sendVoice(
+      ws,
+      `I'm not seeing anything open ${day} ${daypart}. Would ${otherDaypart} work better?`,
+      session
+    );
+    return;
+  }
 
   const options = filtered
     .slice(0, 3)
