@@ -689,6 +689,45 @@ const slotHolds = new Map();
  * ============================================================================
  */
 
+function findClosestSlot(targetTimeText, slots) {
+  const candidates = spokenWordsToTimeCandidates(targetTimeText);
+
+  if (!candidates.length || !slots.length) return null;
+
+  const targetDigits = candidates[0].replace(/[^\d]/g, "");
+  if (!targetDigits) return null;
+
+  const targetHour = parseInt(targetDigits.slice(0, 2));
+  const targetMin = targetDigits.length > 2 ? parseInt(targetDigits.slice(2)) : 0;
+
+  const targetTotal = targetHour * 60 + targetMin;
+
+  let closest = null;
+  let smallestDiff = Infinity;
+
+  for (const slot of slots) {
+    const match = slot.localTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+    if (!match) continue;
+
+    let hour = parseInt(match[1]);
+    const min = parseInt(match[2]);
+    const ap = match[3].toLowerCase();
+
+    if (ap === "pm" && hour !== 12) hour += 12;
+    if (ap === "am" && hour === 12) hour = 0;
+
+    const total = hour * 60 + min;
+    const diff = Math.abs(total - targetTotal);
+
+    if (diff < smallestDiff) {
+      smallestDiff = diff;
+      closest = slot;
+    }
+  }
+
+  return closest;
+}
+
 function randomId() {
   return crypto.randomBytes(8).toString("hex");
 }
@@ -3787,6 +3826,21 @@ case "offer_day_choice": {
     const filtered = getFilteredSlots(session, direct.day, direct.daypart);
     const chosen = chooseSlotFromFilteredResponse(text, filtered);
 
+if (!chosen && direct.hasTime && filtered.length) {
+  const closest = findClosestSlot(text, filtered);
+
+  if (closest) {
+    sendVoice(
+      ws,
+      `The closest I have is ${closest.localTime}. Would that work for you?`,
+      session
+    );
+
+    session.pendingChosenSlot = closest;
+    return;
+  }
+}    
+    
     if (chosen) {
       await confirmChosenSlot(ws, session, chosen);
       return;
