@@ -103,7 +103,7 @@ const SCRIPT_STEPS = [
   {
     id: "intro_4",
     type: "question",
-    text: `My job is just to verify the information and get you appointed with the state underwriter, so he can go over your options. Does that make sense?`,
+    text: `... so they just have me verify the information and get you appointed with the state underwriter, so he can go over your options. Does that make sense?`,
   },
   {
     id: "verify_intro",
@@ -153,7 +153,7 @@ const SCRIPT_STEPS = [
   {
     id: "virtual_meeting",
     type: "question",
-    text: "Ever since covid, we handle appointments by phone or Zoom. Which do you prefer?",
+    text: "... Now, ever since covid, we handle appointments by phone or Zoom. Which one do you prefer?",
   },
   {
     id: "calendar_check",
@@ -163,22 +163,22 @@ const SCRIPT_STEPS = [
   {
   id: "offer_day_choice",
   type: "booking",
-  text: "Would today or tomorrow be better for you?",
+  text: "Now, {{first_name}}, Would today or tomorrow be better for you?",
 },
 {
   id: "offer_daypart_choice",
   type: "booking",
-  text: "Got it. Would morning or evening work better for you?",
+  text: "Okay, and do you prefer the morning or the evening?",
 },
 {
   id: "offer_exact_time",
   type: "booking",
-  text: "What time works best {{chosen_day}} {{chosen_daypart}}?",
+  text: "Got it. What time works best {{chosen_day}} {{chosen_daypart}}?",
 },
   {
     id: "collect_email",
     type: "input",
-    text: "Okay, what is a good email address for the appointment confirmation?",
+    text: "Alright, and what is a good email address for the appointment confirmation?",
   },
   {
     id: "confirmation",
@@ -188,12 +188,12 @@ const SCRIPT_STEPS = [
   {
     id: "reminder_instruction",
     type: "statement",
-    text: `A couple hours before the appointment, just reconfirm so ${UNDERWRITER_NAME} knows you're still good to go.`,
+    text: `...A couple hours before the appointment, just reconfirm so ${UNDERWRITER_NAME} knows you'll still be attending.`,
   },
   {
     id: "closing",
     type: "statement",
-    text: `${UNDERWRITER_NAME} will call you at {{scheduled_time}} your time. Appreciate you, and enjoy the rest of your day.`,
+    text: `...So, ${UNDERWRITER_NAME} will call you at {{scheduled_time}}. Thank you, and enjoy the rest of your day.`,
   },
 ];
 
