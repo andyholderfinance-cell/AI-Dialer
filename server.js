@@ -1241,8 +1241,8 @@ function buildSessionFromLead(lead = {}) {
     lead_type: lead.lead_type || "aged",
     no_mortgage: "No",
 
-  chosen_day: "",
-  chosen_daypart: "",
+    chosen_day: "",
+    chosen_daypart: "",
 };
 
   return {
@@ -3736,53 +3736,6 @@ async function handleStepResponse(ws, session, callerText) {
   );
   return;
 }
-
-      try {
-        await primeCalendlySlots(session);
-        session.currentStepIndex = getStepIndexById("offer_times_today");
-        sendVoice(
-          ws,
-          renderTemplate(getCurrentStep(session).text, session.lead),
-          session
-        );
-      } catch (error) {
-        console.error("Calendly availability error:", {
-          message: error.message,
-          eventType: CALENDLY_EVENT_TYPE_URI,
-          timezone: session.lead.timezone,
-          summary: error.summary || null,
-        });
-
-        note(session, "booking_fallback", {
-          meeting_type: session.lead.meeting_type,
-          desired_step: "calendar_unavailable",
-          error: error.message,
-          summary: error.summary || null,
-        });
-
-        if (error.code === "NO_SLOTS") {
-          session.currentStepIndex = getStepIndexById("collect_email");
-          sendVoice(
-            ws,
-            "It looks like I do not have any openings showing right this second. Let me grab a good email address and we'll send over the next available time.",
-            session
-          );
-          return;
-        }
-
-        setOutcome(session, "calendar_lookup_failed");
-        session.crm.booking_status = "calendar_lookup_failed";
-        session.shouldEndCall = true;
-        releaseHeldSlotForSession(session);
-
-        sendVoice(
-          ws,
-          "I'm having trouble pulling up the calendar on my side right now. We'll reach back out once that is fixed.",
-          session
-        );
-      }
-      return;
-    }
 
    case "calendar_check": {
   try {
