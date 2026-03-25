@@ -2928,7 +2928,7 @@ app.post("/voice", (req, res) => {
     <ConversationRelay
       url="wss://${host}/conversationrelay?leadId=${leadId}"
       ttsProvider="ElevenLabs"
-      voice="sB7vwSCyX0tQmU24cW2C-flash_v2_5-0.85_0.75_0.80"
+      voice="vzb1D7zjti0h5u8StSra-flash_v2_5-0.85_0.75_0.80"
       language="en-US"
       ttsLanguage="en-US"
     />
