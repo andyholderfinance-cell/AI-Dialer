@@ -683,6 +683,12 @@ const slotHolds = new Map();
  * ============================================================================
  */
 
+function shouldDetectObjectionsAtStep(stepId) {
+  const objectionStartIndex = getStepIndexById("intro_3");
+  const currentIndex = getStepIndexById(stepId);
+  return currentIndex >= objectionStartIndex;
+}
+
 function isAffirmative(text) {
   const t = normalizeText(text);
   return containsAny(t, [
@@ -3819,8 +3825,14 @@ async function handleStepResponse(ws, session, callerText) {
   );
   if (relativeHandled) return;
 
-  const matchedObjection =
-  step.id === "intro_1" ? null : detectObjection(text);
+  const objectionEnabledSteps = new Set(
+  SCRIPT_STEPS.slice(getStepIndexById("intro_3")).map((s) => s.id)
+);
+
+const matchedObjection = objectionEnabledSteps.has(step.id)
+  ? detectObjection(text)
+  : null;
+  
   if (matchedObjection) {
     markObjection(session, matchedObjection, step.id);
 
@@ -4374,8 +4386,20 @@ wss.on("connection", (ws, req) => {
           return;
         }
 
-        const freshObjection = detectObjection(callerText);
+        const currentStep = getCurrentStep(session);
+        const stepId = currentStep?.id || "";
 
+        const detected = detectObjection(callerText);
+
+        const freshObjection =
+          detected &&
+          (
+            detected.category === "terminal" ||
+            shouldDetectObjectionsAtStep(stepId)
+          )
+            ? detected
+            : null;
+        
         if (
           freshObjection &&
           freshObjection.id !== session.postObjectionSourceId &&
