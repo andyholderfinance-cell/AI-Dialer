@@ -1712,11 +1712,17 @@ setInterval(cleanupExpiredSlotHolds, SLOT_HOLD_CLEANUP_MS).unref();
  * ============================================================================
  */
 
-/**
- * ============================================================================
- * CALENDLY
- * ============================================================================
- */
+const {
+  calendlyFetch,
+  buildCalendlyErrorSummary,
+  getCalendlyAvailableTimes,
+  primeCalendlySlots,
+  buildCalendlyBookingFields,
+  buildCalendlyQuestionsAndAnswers,
+  buildCalendlyLocation,
+  ensureChosenSlotStillAvailable,
+  createCalendlyInvitee,
+} = require("./src/calendly");
 
 async function primeCalendlySlotsWrapper(session, forceRefresh = false) {
   return primeCalendlySlots(
