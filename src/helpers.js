@@ -47,14 +47,197 @@ function recenterLine() {
   ]);
 }
 
-function humanize(text) {
-  const fillers = ["…", "uh,", "um,", "let me see…", "just a second…"];
+function humanize(text, options = {}) {
+  const raw = safeString(text).trim();
+  if (!raw) return raw;
 
-  if (Math.random() < 0.25) {
-    return `${pick(fillers)} ${text}`;
+  const {
+    tone = "neutral",
+    emotion = "neutral",
+    isPreciseBooking = false,
+    skipImperfection = false,
+  } = options;
+
+  if (isPreciseBooking || skipImperfection) {
+    return raw;
   }
 
-  return text;
+  let result = raw;
+
+  const softOpeners = [
+    "",
+    "",
+    "Okay, ",
+    "Yeah so, ",
+    "Alright, ",
+    "Let me see here—",
+  ];
+
+  const guardedOpeners = [
+    "",
+    "Yeah, ",
+    "Okay, ",
+    "Alright so, ",
+  ];
+
+  const busyOpeners = [
+    "",
+    "Yeah, ",
+    "Sure, ",
+  ];
+
+  let openers = softOpeners;
+  if (tone === "guarded") openers = guardedOpeners;
+  if (emotion === "busy") openers = busyOpeners;
+
+  if (Math.random() < 0.18) {
+    result = `${pick(openers)}${result}`;
+  }
+
+  if (Math.random() < 0.14) {
+    result = result.replace(/^Okay,\s*/i, "Okay so—");
+  }
+
+  if (Math.random() < 0.12) {
+    result = result.replace(/^Yeah\s*/i, "Yeah so—");
+  }
+
+  if (Math.random() < 0.10) {
+    result = result.replace(/^From what I'm seeing here/i, "What I'm seeing here is");
+  }
+
+  if (Math.random() < 0.16 && !result.includes("...")) {
+    result = result.replace(/,\s/g, ", ... ");
+  }
+
+  if (Math.random() < 0.10) {
+    result = result.replace(/\.\s/g, "... ");
+  }
+
+  result = result.replace(/\s+/g, " ").trim();
+  return result;
+}
+
+function detectConversationEmotion(text) {
+  const t = normalizeText(text);
+
+  if (!t) return "neutral";
+
+  if (
+    containsAny(t, [
+      "stop calling",
+      "this is stupid",
+      "bullshit",
+      "annoying",
+      "again",
+      "leave me alone",
+      "scam",
+      "sounds fake",
+    ])
+  ) {
+    return "annoyed";
+  }
+
+  if (
+    containsAny(t, [
+      "what do you mean",
+      "im confused",
+      "i'm confused",
+      "huh",
+      "what is this",
+      "what is this about",
+      "i dont understand",
+      "i don't understand",
+    ])
+  ) {
+    return "confused";
+  }
+
+  if (
+    containsAny(t, [
+      "im busy",
+      "i'm busy",
+      "at work",
+      "driving",
+      "in the car",
+      "walking into work",
+      "i only have a second",
+    ])
+  ) {
+    return "busy";
+  }
+
+  if (
+    containsAny(t, [
+      "okay",
+      "alright",
+      "makes sense",
+      "that makes sense",
+      "sure",
+      "yeah",
+      "yes",
+    ])
+  ) {
+    return "open";
+  }
+
+  return "neutral";
+}
+
+function nextConversationTone(currentTone = "neutral", emotion = "neutral") {
+  if (emotion === "annoyed") return "guarded";
+  if (emotion === "busy") return "brief";
+  if (emotion === "confused") return "careful";
+  if (emotion === "open") return "warm";
+  return currentTone || "neutral";
+}
+
+function emotionAcknowledgement(emotion) {
+  switch (emotion) {
+    case "annoyed":
+      return pick([
+        "Yeah, I hear you.",
+        "I got you.",
+        "Totally fair.",
+      ]);
+    case "confused":
+      return pick([
+        "Yeah, no worries.",
+        "I got you.",
+        "Okay, let me make that simpler.",
+      ]);
+    case "busy":
+      return pick([
+        "Yeah, I got you.",
+        "Totally understand.",
+        "No worries, I'll keep it quick.",
+      ]);
+    case "open":
+      return pick([
+        "",
+        "Perfect.",
+        "Okay, good.",
+      ]);
+    default:
+      return "";
+  }
+}
+
+function recenterToFile() {
+  return pick([
+    "From what I'm seeing here on the file,",
+    "What I'm checking on my end here is",
+    "The main thing I'm looking at on the file is",
+    "I'm really just trying to handle the file the right way on my end,",
+  ]);
+}
+
+function fastAIFallbackLine() {
+  return pick([
+    "Yeah, let me make sure I'm looking at this correctly here.",
+    "Okay, let me double check the file on my end.",
+    "Gotcha, let me make sure I have this right here.",
+  ]);
 }
 
 function detectGoodbye(text) {
@@ -380,6 +563,11 @@ module.exports = {
   naturalAck,
   recenterLine,
   humanize,
+  detectConversationEmotion,
+  nextConversationTone,
+  emotionAcknowledgement,
+  recenterToFile,
+  fastAIFallbackLine,
   detectGoodbye,
   detectRepeatRequest,
   detectWrongPerson,
