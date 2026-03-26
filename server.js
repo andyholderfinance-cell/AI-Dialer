@@ -2615,18 +2615,18 @@ app.post("/dial", async (req, res) => {
 app.get("/testdial", async (req, res) => {
   try {
     const host = req.headers.host;
-    const phone = process.env.TEST_DIAL_NUMBER || "+16315786810";
+    const phone = process.env.TEST_DIAL_NUMBER || "+18175842356";
 
     const leadId = randomId();
     const session = buildSessionFromLead({
       phone,
-      first_name: "Alayya",
-      full_name: "Alaya McClary",
+      first_name: "Andy",
+      full_name: "Andy Holder",
       lender: "Rocket Mortgage",
-      state: "Delaware",
+      state: "Florida",
       address: "1 2 3 Main Street",
       loan_amount: "$150,000",
-      age: "23",
+      age: "25",
       email: process.env.TEST_DIAL_EMAIL || "",
       lead_type: "aged",
     });
