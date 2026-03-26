@@ -3210,6 +3210,65 @@ app.get("/session/:leadId", (req, res) => {
  * ============================================================================
  */
 
+async function handlePendingSlotConfirmation(ws, session, callerText) {
+  const text = safeString(callerText);
+
+  if (!session.awaitingSlotConfirmation || !session.pendingConfirmationSlot) {
+    return false;
+  }
+
+  if (isAffirmative(text)) {
+    const chosen = session.pendingConfirmationSlot;
+    session.pendingConfirmationSlot = null;
+    session.awaitingSlotConfirmation = false;
+    clearBookingOfferState(session);
+
+    await confirmChosenSlot(ws, session, chosen);
+    return true;
+  }
+
+  if (isNegative(text)) {
+    const rejected = session.pendingConfirmationSlot;
+    session.pendingConfirmationSlot = null;
+    session.awaitingSlotConfirmation = false;
+
+    const fallbackPool = getSlotsForPreference(
+      session,
+      rejected.dayPhrase,
+      getDaypartForSlot(rejected)
+    ).filter((slot) => slot.utcTime !== rejected.utcTime);
+
+    if (fallbackPool.length) {
+      offerConcreteSlots(ws, session, fallbackPool, "No problem,");
+      return true;
+    }
+
+    const allFallback = getAllUsableSlots(session).filter(
+      (slot) => slot.utcTime !== rejected.utcTime
+    );
+
+    if (allFallback.length) {
+      offerConcreteSlots(ws, session, allFallback, "No problem,");
+      return true;
+    }
+
+    sendVoice(
+      ws,
+      "No problem. Let me grab your email and we'll send over the next available opening.",
+      session
+    );
+    session.currentStepIndex = getStepIndexById("collect_email");
+    return true;
+  }
+
+  sendVoice(
+    ws,
+    `Would ${slotLabel(session.pendingConfirmationSlot)} work for you?`,
+    session
+  );
+  return true;
+}
+
 async function handleBookingStep(ws, session, callerText) {
   const text = safeString(callerText);
   const direct = detectDirectBookingIntent(text);
@@ -3707,7 +3766,15 @@ async function offerFreshSlotsAfterHoldLoss(ws, session, introLine = "") {
   session.pendingChosenSlot = null;
   session.lead.scheduled_time = "";
   session.lead.scheduled_time_utc = "";
-
+  session.pendingConfirmationSlot = null;
+  session.awaitingSlotConfirmation = false;
+  session.offeredSlotOptions = [];
+  session.bookingContext = { day: "", daypart: "" };
+  session.chosenBookingDay = "";
+  session.chosenBookingDaypart = "";
+  session.lead.chosen_day = "";
+  session.lead.chosen_daypart = "";
+  
   try {
     await primeCalendlySlots(session, true);
     session.currentStepIndex = getStepIndexById("offer_day_choice");
