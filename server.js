@@ -804,8 +804,9 @@ function validateEnv() {
 
 function buildSessionFromLead(lead = {}) {
   const timezone =
-    lead.timezone || inferTimezoneFromState(lead.state || lead.state_code);
-
+  lead.timezone ||
+  inferTimezoneFromState(lead.state || lead.state_code, DEFAULT_TIMEZONE);
+  
   const stateValue = lead.state_code || lead.state || DEFAULT_STATE;
 
   const sessionLead = {
