@@ -811,7 +811,7 @@ function offerConcreteSlots(ws, session, slots, prefix = "") {
       ? `${prefix} I have ${slotLabel(cleanSlots[0])}. Would that work for you?`
       : `I have ${slotLabel(cleanSlots[0])}. Would that work for you?`;
 
-    sendVoice(ws, msg, session);
+    sendVoice(ws, msg, session, { isPreciseBooking: true });
     return;
   }
 
@@ -819,7 +819,7 @@ function offerConcreteSlots(ws, session, slots, prefix = "") {
     ? `${prefix} I have ${slotLabel(cleanSlots[0])} or ${slotLabel(cleanSlots[1])}. Which works better for you?`
     : `I have ${slotLabel(cleanSlots[0])} or ${slotLabel(cleanSlots[1])}. Which works better for you?`;
 
-  sendVoice(ws, msg, session);
+  sendVoice(ws, msg, session, { isPreciseBooking: true });
 }
 
 function getAlternateDaypart(daypart) {
@@ -1757,8 +1757,9 @@ function sendVoice(ws, text, session = null, options = {}) {
     }
   }
 
-  const shouldHumanize = !options?.skipHumanize;
-
+  const shouldHumanize =
+  !options?.skipHumanize && !options?.isPreciseBooking;
+  
   const finalText = shouldHumanize ? humanize(text) : text;
 
   if (ws.readyState === WebSocket.OPEN) {
@@ -2605,13 +2606,14 @@ async function confirmChosenSlot(ws, session, chosen) {
   session.currentStepIndex = getStepIndexById("collect_email");
 
   sendVoice(
-    ws,
-    `Perfect, I have you at ${chosen.localTime}. ${renderTemplate(
-      getCurrentStep(session).text,
-      session.lead
-    )}`,
-    session
-  );
+  ws,
+  `Perfect, I have you at ${chosen.localTime}. ${renderTemplate(
+    getCurrentStep(session).text,
+    session.lead
+  )}`,
+  session,
+  { isPreciseBooking: true }
+);
 
   return true;
 }
