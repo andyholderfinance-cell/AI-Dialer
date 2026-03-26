@@ -1645,8 +1645,14 @@ setInterval(cleanupExpiredSlotHolds, SLOT_HOLD_CLEANUP_MS).unref();
  * ============================================================================
  */
 
+/**
+ * ============================================================================
+ * CALENDLY
+ * ============================================================================
+ */
+
 async function primeCalendlySlotsWrapper(session, forceRefresh = false) {
-  return primeCalendlySlotsWrapper(
+  return primeCalendlySlots(
     session,
     forceRefresh,
     filterHeldSlotsForSession,
@@ -1655,25 +1661,11 @@ async function primeCalendlySlotsWrapper(session, forceRefresh = false) {
 }
 
 async function ensureChosenSlotStillAvailableWrapper(session) {
-  return ensureChosenSlotStillAvailableWrapper(
+  await ensureChosenSlotStillAvailable(
     session,
     extendSlotHold,
     primeCalendlySlotsWrapper
   );
-}
-
-    const summary = buildCalendlyErrorSummary({
-      status: response.status,
-      body: data,
-    });
-
-    console.error("Calendly API failure", {
-      path,
-      method: options.method || "GET",
-      status: response.status,
-      response: data,
-      parsed: summary,
-    });
 
   const hold = slotHolds.get(session.pendingChosenSlot.utcTime);
   if (!hold || hold.sessionId !== session.id) {
