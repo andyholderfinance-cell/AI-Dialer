@@ -21,6 +21,13 @@ const {
   VOICE_STYLE_INSTRUCTIONS,
 } = require("./src/config");
 
+const app = express();
+app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
+
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server, path: "/conversationrelay" });
+
 /**
  * ============================================================================
  * SCRIPT
