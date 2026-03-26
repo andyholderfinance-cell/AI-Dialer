@@ -88,7 +88,7 @@ const SCRIPT_STEPS = [
   {
     id: "intro_1",
   type: "question",
-  text: "Hey {{first_name}}?... can you hear me okay?"
+  text: "Hey is this {{first_name}}?
   },
   {
     id: "intro_2",
