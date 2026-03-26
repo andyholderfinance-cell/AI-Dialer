@@ -74,6 +74,11 @@ const {
   naturalAck,
   recenterLine,
   humanize,
+  detectConversationEmotion,
+  nextConversationTone,
+  emotionAcknowledgement,
+  recenterToFile,
+  fastAIFallbackLine,
   detectGoodbye,
   detectRepeatRequest,
   detectWrongPerson,
@@ -89,6 +94,11 @@ const {
   normalizeSpokenEmail,
   extractEmail,
 } = require("./src/helpers");
+
+const AI_REPLY_TIMEOUT_MS = Number(process.env.AI_REPLY_TIMEOUT_MS || 1200);
+const AI_CLASSIFIER_TIMEOUT_MS = Number(
+  process.env.AI_CLASSIFIER_TIMEOUT_MS || 900
+);
 
 function shouldDetectObjectionsAtStep(stepId) {
   const objectionStartIndex = getStepIndexById("intro_3");
@@ -540,6 +550,9 @@ function buildSessionFromLead(lead = {}) {
     screeningState: "unknown",
     screeningCount: 0,
     scriptStarted: false,
+    conversationTone: "neutral",
+    lastDetectedEmotion: "neutral",
+    aiLatencyMode: "normal",    
     lastBotMessage: "",
     lastMeaningfulBotMessage: "",
     lastMeaningfulBotStepId: "",
@@ -816,7 +829,13 @@ function sendVoice(ws, text, session = null, options = {}) {
   const shouldHumanize =
     !options?.skipHumanize && !options?.isPreciseBooking;
 
-  const finalText = shouldHumanize ? humanize(text) : text;
+  const finalText = shouldHumanize
+    ? humanize(text, {
+        tone: session?.conversationTone || "neutral",
+        emotion: session?.lastDetectedEmotion || "neutral",
+        isPreciseBooking: Boolean(options?.isPreciseBooking),
+      })
+    : text;
 
   if (ws.readyState === WebSocket.OPEN) {
     ws.send(buildVoiceMessage(finalText));
@@ -834,6 +853,54 @@ function note(session, type, value) {
     value,
     at: Date.now(),
   });
+}
+
+function updateSessionToneFromText(session, callerText) {
+  const emotion = detectConversationEmotion(callerText);
+  session.lastDetectedEmotion = emotion;
+  session.conversationTone = nextConversationTone(
+    session.conversationTone,
+    emotion
+  );
+  return emotion;
+}
+
+function buildUnknownAnchoredReply(session, baseReply = "") {
+  const raw = safeString(baseReply).trim();
+
+  const anchor = pick([
+    "From what I'm seeing here on the file, I'm just trying to verify it the right way.",
+    "I'm really just trying to handle the file correctly on my end.",
+    "My part is just verifying the file and getting you lined up if you still want to review it.",
+  ]);
+
+  if (!raw) return anchor;
+
+  const normalized = normalizeText(raw);
+  if (
+    normalized.includes("file") ||
+    normalized.includes("underwriter") ||
+    normalized.includes("verify")
+  ) {
+    return raw;
+  }
+
+  return `${raw} ${anchor}`;
+}
+
+async function withTimeout(workFn, ms, fallbackValue) {
+  let timeoutId;
+
+  const timeoutPromise = new Promise((resolve) => {
+    timeoutId = setTimeout(() => resolve(fallbackValue), ms);
+  });
+
+  try {
+    const result = await Promise.race([workFn(), timeoutPromise]);
+    return result;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function sendNextPrompt(ws, session) {
@@ -1934,13 +2001,22 @@ function classifyUnknownObjectionRuleBased(session, text) {
 }
 
 async function classifyUnknownMomentAI(session, callerText) {
-  try {
-    const response = await openai.responses.create({
-      model: "gpt-4.1-mini",
-      input: [
-        {
-          role: "system",
-          content: `
+  const fallbackClassification = {
+    type: UNKNOWN_OBJECTION_TYPES.GENERIC_UNKNOWN,
+    confidence: 0.25,
+    recommended_action: UNKNOWN_ACTIONS.AI_BRIEF_CLARIFY_THEN_RECENTER,
+    reason: "ai_classifier_failed",
+  };
+
+  return withTimeout(
+    async () => {
+      try {
+        const response = await openai.responses.create({
+          model: "gpt-4.1-mini",
+          input: [
+            {
+              role: "system",
+              content: `
 You classify unexpected caller responses during a mortgage protection appointment-setting call.
 
 Return strict JSON only.
@@ -1975,40 +2051,41 @@ graceful_exit
 repeat_last_step
 ai_brief_clarify_then_recenter
 `,
-        },
-        {
-          role: "user",
-          content: JSON.stringify({
-            current_step: safeString(getCurrentStep(session)?.id),
-            lead: session.lead,
-            caller_text: callerText,
-          }),
-        },
-      ],
-    });
+            },
+            {
+              role: "user",
+              content: JSON.stringify({
+                current_step: safeString(getCurrentStep(session)?.id),
+                lead: session.lead,
+                caller_text: callerText,
+                tone: session.conversationTone,
+                emotion: session.lastDetectedEmotion,
+              }),
+            },
+          ],
+        });
 
-    const raw = safeString(response.output_text).trim();
-    const parsed = JSON.parse(raw);
+        const raw = safeString(response.output_text).trim();
+        const parsed = JSON.parse(raw);
 
-    if (!parsed.type || !parsed.recommended_action) {
-      throw new Error("AI classifier returned incomplete JSON");
-    }
+        if (!parsed.type || !parsed.recommended_action) {
+          throw new Error("AI classifier returned incomplete JSON");
+        }
 
-    return {
-      type: parsed.type,
-      confidence: Number(parsed.confidence || 0.5),
-      recommended_action: parsed.recommended_action,
-      reason: safeString(parsed.reason || "ai_classifier"),
-    };
-  } catch (error) {
-    console.error("Unknown objection classifier AI error:", error);
-    return {
-      type: UNKNOWN_OBJECTION_TYPES.GENERIC_UNKNOWN,
-      confidence: 0.25,
-      recommended_action: UNKNOWN_ACTIONS.AI_BRIEF_CLARIFY_THEN_RECENTER,
-      reason: "ai_classifier_failed",
-    };
-  }
+        return {
+          type: parsed.type,
+          confidence: Number(parsed.confidence || 0.5),
+          recommended_action: parsed.recommended_action,
+          reason: safeString(parsed.reason || "ai_classifier"),
+        };
+      } catch (error) {
+        console.error("Unknown objection classifier AI error:", error);
+        return fallbackClassification;
+      }
+    },
+    AI_CLASSIFIER_TIMEOUT_MS,
+    fallbackClassification
+  );
 }
 
 async function classifyUnknownMomentHybrid(session, callerText) {
@@ -2100,13 +2177,20 @@ function getUnknownTemplateReply(type, session) {
 }
 
 async function getFallbackAIReply(session, callerText) {
-  try {
-    const aiResponse = await openai.responses.create({
-      model: "gpt-4.1-mini",
-      input: [
-        {
-          role: "system",
-          content: `
+  const fallbackLine = buildUnknownAnchoredReply(
+    session,
+    fastAIFallbackLine()
+  );
+
+  return withTimeout(
+    async () => {
+      try {
+        const aiResponse = await openai.responses.create({
+          model: "gpt-4.1-mini",
+          input: [
+            {
+              role: "system",
+              content: `
 ${VOICE_STYLE_INSTRUCTIONS}
 
 Conversation rules:
@@ -2121,35 +2205,48 @@ Conversation rules:
 
 Current step: ${safeString(getCurrentStep(session)?.id)}
 Lead: ${JSON.stringify(session.lead)}
+Tone: ${safeString(session.conversationTone)}
+Emotion: ${safeString(session.lastDetectedEmotion)}
 `,
-        },
-        {
-          role: "user",
-          content: callerText,
-        },
-      ],
-    });
+            },
+            {
+              role: "user",
+              content: callerText,
+            },
+          ],
+        });
 
-    return (
-      aiResponse.output_text ||
-      "Okay, let me see if I have the correct information here."
-    );
-  } catch (error) {
-    console.error("Fallback AI error:", error);
-    return "Okay, let me see if I have the correct information here.";
-  }
+        const output =
+          aiResponse.output_text || "Okay, let me see if I have this right here.";
+
+        return buildUnknownAnchoredReply(session, output);
+      } catch (error) {
+        console.error("Fallback AI error:", error);
+        return fallbackLine;
+      }
+    },
+    AI_REPLY_TIMEOUT_MS,
+    fallbackLine
+  );
 }
 
 async function getUnknownObjectionReply(session, callerText) {
-  try {
-    const currentStep = getCurrentStep(session);
+  const fastFallback = buildUnknownAnchoredReply(
+    session,
+    fastAIFallbackLine()
+  );
 
-    const aiResponse = await openai.responses.create({
-      model: "gpt-4.1-mini",
-      input: [
-        {
-          role: "system",
-          content: `
+  return withTimeout(
+    async () => {
+      try {
+        const currentStep = getCurrentStep(session);
+
+        const aiResponse = await openai.responses.create({
+          model: "gpt-4.1-mini",
+          input: [
+            {
+              role: "system",
+              content: `
 ${VOICE_STYLE_INSTRUCTIONS}
 
 You are responding to a homeowner during a scripted mortgage protection call.
@@ -2175,36 +2272,38 @@ Do NOT:
 Response rules:
 • 1 sentence preferred
 • 2 sentences maximum
-• under 22 words
+• under 24 words
 • natural human tone
 • calm and conversational
-• may start with:
-  "Yeah so"
-  "No worries"
-  "I got you"
-  "From what I'm seeing here"
-• end by gently recentering to the file when possible
+• keep some anchor to the file / verify / underwriter narrative
 
 Current script step: ${safeString(currentStep?.id)}
 Script line: ${safeString(currentStep?.text)}
 Lead info: ${JSON.stringify(session.lead)}
+Tone: ${safeString(session.conversationTone)}
+Emotion: ${safeString(session.lastDetectedEmotion)}
 `,
-        },
-        {
-          role: "user",
-          content: callerText,
-        },
-      ],
-    });
+            },
+            {
+              role: "user",
+              content: callerText,
+            },
+          ],
+        });
 
-    return (
-      aiResponse.output_text ||
-      "I got you, let me just make sure I have the correct information here."
-    );
-  } catch (error) {
-    console.error("Unknown objection AI error:", error);
-    return "I got you, let me just make sure I have the correct information here.";
-  }
+        const output =
+          aiResponse.output_text ||
+          "I got you, let me just make sure I have this right here.";
+
+        return buildUnknownAnchoredReply(session, output);
+      } catch (error) {
+        console.error("Unknown objection AI error:", error);
+        return fastFallback;
+      }
+    },
+    AI_REPLY_TIMEOUT_MS,
+    fastFallback
+  );
 }
 
 /**
@@ -2451,14 +2550,29 @@ async function handleUnknownMomentByType(ws, session, callerText, classification
     });
 
     if (currentStep && isQuestionLike(currentStep)) {
-      sendVoice(
-        ws,
-        renderTemplate(currentStep.text, session.lead),
-        session,
-        { isFollowupPrompt: true }
-      );
-      return true;
-    }
+  const alreadyAsked = session.lastQuestion === currentStep.id;
+
+  if (!alreadyAsked) {
+    session.lastQuestion = currentStep.id;
+
+    sendVoice(
+      ws,
+      renderTemplate(currentStep.text, session.lead),
+      session,
+      { isFollowupPrompt: true }
+    );
+  } else {
+    
+    sendVoice(
+      ws,
+      "Gotcha — just wanted to make sure I heard you right there.",
+      session,
+      { isFollowupPrompt: true }
+    );
+  }
+
+  return true;
+}
 
     sendVoice(ws, `${recenterLine()} give me one second here.`, session, {
       isFollowupPrompt: true,
@@ -2494,11 +2608,32 @@ async function handleUnknownMomentByType(ws, session, callerText, classification
     return true;
   }
 
-  if (plan.action === UNKNOWN_ACTIONS.CLARIFY_THEN_RESUME) {
-    const templated = getUnknownTemplateReply(classification.type, session);
-    const reply = templated || (await getUnknownObjectionReply(session, callerText));
+  if (plan.action === UNKNOWN_ACTIONS.AI_BRIEF_CLARIFY_THEN_RECENTER) {
+    const freestyleReply = await getUnknownObjectionReply(session, callerText);
+    const anchoredReply = buildUnknownAnchoredReply(session, freestyleReply);
+    const emotionLead = emotionAcknowledgement(session.lastDetectedEmotion);
 
-    sendVoice(ws, reply, session);
+    sendVoice(
+      ws,
+      [emotionLead, anchoredReply].filter(Boolean).join(" "),
+      session
+    );
+    sendVoice(ws, `${recenterToFile()} ..., give me one second here`, session);
+    return true;
+  }  
+
+   if (plan.action === UNKNOWN_ACTIONS.CLARIFY_THEN_RESUME) {
+    const templated = getUnknownTemplateReply(classification.type, session);
+    const aiReply =
+      templated || (await getUnknownObjectionReply(session, callerText));
+    const anchoredReply = buildUnknownAnchoredReply(session, aiReply);
+    const emotionLead = emotionAcknowledgement(session.lastDetectedEmotion);
+
+    sendVoice(
+      ws,
+      [emotionLead, anchoredReply].filter(Boolean).join(" "),
+      session
+    );
 
     session.objectionReturnStepId = currentStepId;
     askPostObjectionFollowup(
@@ -3636,8 +3771,10 @@ wss.on("connection", (ws, req) => {
       }
 
       if (data.type === "prompt" && data.voicePrompt !== undefined) {
-        const callerText = safeString(data.voicePrompt);
-        console.log("Caller said:", callerText);
+      const callerText = safeString(data.voicePrompt);
+      console.log("Caller said:", callerText);
+
+      updateSessionToneFromText(session, callerText);
 
         const interrupted = detectLikelyInterruption(session);
         if (interrupted) {
