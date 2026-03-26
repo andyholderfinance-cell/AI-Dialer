@@ -88,7 +88,7 @@ const SCRIPT_STEPS = [
   {
     id: "intro_1",
   type: "question",
-  text: "Hey is this {{first_name}}?
+  text: 'Hey is this {{first_name}}?'
   },
   {
     id: "intro_2",
@@ -1482,6 +1482,7 @@ function buildSessionFromLead(lead = {}) {
     pendingConfirmationSlot: null,
     awaitingSlotConfirmation: false,
     offeredSlotOptions: [],
+    pendingChosenSlot: null,
     bookingContext: {
     day: "",
     daypart: "",
