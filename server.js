@@ -1396,31 +1396,52 @@ async function handlePostObjectionAck(ws, session, callerText) {
     }
 
     if (currentMode === "fair_enough") {
-      sendVoice(ws, "Fair enough?", session, { isFollowupPrompt: true });
+      sendVoice(ws, pickVariant([
+        "Fair enough?",
+        "That seem fair?",
+        "Makes sense?",
+      ]), session, { isFollowupPrompt: true });
       return;
     }
 
     if (currentMode === "okay_so_far") {
-      sendVoice(ws, "Okay so far?", session, { isFollowupPrompt: true });
+      sendVoice(ws, pickVariant([
+        "Okay so far?",
+        "You with me so far?",
+      ]), session, { isFollowupPrompt: true });
       return;
     }
 
     if (currentMode === "brief_ack") {
-      sendVoice(ws, "Okay?", session, { isFollowupPrompt: true });
+      sendVoice(ws, pickVariant([
+        "Okay?",
+        "Gotcha?",
+        "Alright?",
+      ]), session, { isFollowupPrompt: true });
       return;
     }
 
     if (currentMode === "you_follow_me") {
-      sendVoice(ws, "You follow me?", session, { isFollowupPrompt: true });
+      sendVoice(ws, pickVariant([
+        "You follow me?",
+        "You see what I mean?",
+      ]), session, { isFollowupPrompt: true });
       return;
     }
 
-   sendVoice(ws, getRandom([
-  "Sound fair?",
-  "That line up?",
-  "You with me so far?",
-  "Make sense?",
-]), session);
+    sendVoice(
+      ws,
+      pickVariant([
+        "Sound fair?",
+        "That line up?",
+        "You with me so far?",
+        "Make sense?",
+      ]),
+      session,
+      { isFollowupPrompt: true }
+    );
+    return;
+  }
 
   if (isPositiveAck(ackText) || ackText) {
     resumeAfterObjection(ws, session);
