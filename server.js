@@ -873,12 +873,24 @@ function detectObjection(text) {
 }
 
 function formatObjectionResponse(lines) {
-  return lines
+  const openers = [
+    "",
+    "Yeah so,",
+    "No worries,",
+    "I got you,",
+    "From what I'm seeing here,",
+  ];
+
+  const opener = Math.random() < 0.6 ? pick(openers) : "";
+
+  const body = lines
     .map((line) => {
       if (safeString(line).includes("[PAUSE")) return "...";
       return line;
     })
     .join(" ");
+
+  return opener ? `${opener} ${body}` : body;
 }
 
 function buildVoiceMessage(text) {
@@ -1003,6 +1015,10 @@ function getPostObjectionModeForId(objectionId) {
   return modeMap[objectionId] || "does_that_make_sense";
 }
 
+function pickVariant(arr) {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
 function askPostObjectionFollowup(
   ws,
   session,
@@ -1014,32 +1030,38 @@ function askPostObjectionFollowup(
   session.postObjectionSourceId = sourceId;
   session.postObjectionClarificationCount = 0;
 
-  if (mode === "does_that_make_sense") {
-    sendVoice(ws, "Does that make sense?", session, { isFollowupPrompt: true });
-    return;
-  }
+  const variants = {
+    does_that_make_sense: [
+      "Does that make sense?",
+      "You follow me?",
+      "Does that sound right?",
+      "That make sense so far?",
+      "Am I explaining that okay?",
+    ],
+    fair_enough: [
+      "Fair enough?",
+      "That seem fair?",
+      "Makes sense?",
+    ],
+    okay_so_far: [
+      "Okay so far?",
+      "You with me so far?",
+    ],
+    brief_ack: [
+      "Okay?",
+      "Gotcha?",
+      "Alright?",
+    ],
+    you_follow_me: [
+      "You follow me?",
+      "You see what I mean?",
+    ],
+  };
 
-  if (mode === "fair_enough") {
-    sendVoice(ws, "Fair enough?", session, { isFollowupPrompt: true });
-    return;
-  }
+  const pool = variants[mode] || variants.does_that_make_sense;
+  const line = pickVariant(pool);
 
-  if (mode === "okay_so_far") {
-    sendVoice(ws, "Okay so far?", session, { isFollowupPrompt: true });
-    return;
-  }
-
-  if (mode === "brief_ack") {
-    sendVoice(ws, "Okay?", session, { isFollowupPrompt: true });
-    return;
-  }
-
-  if (mode === "you_follow_me") {
-    sendVoice(ws, "You follow me?", session, { isFollowupPrompt: true });
-    return;
-  }
-
-  sendVoice(ws, "Does that make sense?", session, { isFollowupPrompt: true });
+  sendVoice(ws, line, session, { isFollowupPrompt: true });
 }
 
 function isPositiveAck(text) {
@@ -1393,9 +1415,12 @@ async function handlePostObjectionAck(ws, session, callerText) {
       return;
     }
 
-    sendVoice(ws, "Does that make sense?", session, { isFollowupPrompt: true });
-    return;
-  }
+   sendVoice(ws, getRandom([
+  "Sound fair?",
+  "That line up?",
+  "You with me so far?",
+  "Make sense?",
+]), session);
 
   if (isPositiveAck(ackText) || ackText) {
     resumeAfterObjection(ws, session);
@@ -3638,14 +3663,15 @@ async function handleStepResponse(ws, session, callerText) {
       session.verifyingField = null;
 
       session.currentStepIndex = getStepIndexById("verify_loan");
-      sendVoice(
-        ws,
-        `${naturalAck()}. ${renderTemplate(
-          getCurrentStep(session).text,
-          session.lead
-        )}`,
-        session
+      const ack = naturalAck();
+      const line = renderTemplate(
+      getCurrentStep(session).text,
+      session.lead
       );
+
+      const msg = ack ? `${ack}. ${line}` : line;
+
+      sendVoice(ws, msg, session);
       return;
     }
 
@@ -3681,14 +3707,15 @@ async function handleStepResponse(ws, session, callerText) {
       session.verifyingField = null;
 
       session.currentStepIndex = getStepIndexById("verify_coborrower");
-      sendVoice(
-        ws,
-        `${naturalAck()}. ${renderTemplate(
-          getCurrentStep(session).text,
-          session.lead
-        )}`,
-        session
+      const ack = naturalAck();
+      const line = renderTemplate(
+      getCurrentStep(session).text,
+      session.lead
       );
+
+      const msg = ack ? `${ack}. ${line}` : line;
+
+      sendVoice(ws, msg, session);
       return;
     }
 
