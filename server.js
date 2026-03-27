@@ -218,6 +218,7 @@ function chooseFromOfferedSlots(text, session) {
 function offerConcreteSlots(ws, session, slots, prefix = "") {
   const cleanSlots = (slots || []).slice(0, 2);
   session.offeredSlotOptions = cleanSlots;
+  trackBookingOffer(session, cleanSlots);
 
   if (!cleanSlots.length) {
     sendVoice(
@@ -249,6 +250,75 @@ function getAlternateDaypart(daypart) {
   if (daypart === "morning") return "evening";
   if (daypart === "evening") return "morning";
   return "";
+}
+
+function buildSlotsSignature(slots = []) {
+  return (slots || [])
+    .slice(0, 2)
+    .map((s) => `${s.dayPhrase}|${s.localTime}|${s.utcTime}`)
+    .join("::");
+}
+
+function resetBookingLoopState(session) {
+  session.lastOfferedSlotsSignature = "";
+  session.bookingOfferRepeatCount = 0;
+}
+
+function trackBookingOffer(session, slots = []) {
+  const signature = buildSlotsSignature(slots);
+
+  if (!signature) {
+    resetBookingLoopState(session);
+    return;
+  }
+
+  if (session.lastOfferedSlotsSignature === signature) {
+    session.bookingOfferRepeatCount += 1;
+  } else {
+    session.lastOfferedSlotsSignature = signature;
+    session.bookingOfferRepeatCount = 1;
+  }
+}
+
+function callerRequestedSpecificTime(text) {
+  const direct = detectDirectBookingIntent(text);
+  return Boolean(direct.hasTime);
+}
+
+function callerRejectedSlots(text) {
+  const t = normalizeText(text);
+  return (
+    isNegative(text) ||
+    containsAny(t, [
+      "that doesnt work",
+      "that doesn't work",
+      "none of those work",
+      "neither",
+      "too early",
+      "too late",
+      "not those",
+      "something later",
+      "something earlier",
+    ])
+  );
+}
+
+function bookingAcknowledgementForRequest(text) {
+  const t = normalizeText(text);
+
+  if (containsAny(t, ["morning"])) {
+    return "Gotcha, let me check the morning times real quick.";
+  }
+
+  if (containsAny(t, ["evening", "tonight", "after work"])) {
+    return "Gotcha, let me check the evening times real quick.";
+  }
+
+  if (callerRequestedSpecificTime(text)) {
+    return "Gotcha, let me check that time real quick.";
+  }
+
+  return "Gotcha, let me see what else I have open.";
 }
 
 function findClosestSlot(targetTimeText, slots) {
@@ -543,6 +613,9 @@ function buildSessionFromLead(lead = {}) {
       day: "",
       daypart: "",
     },
+    lastOfferedSlotsSignature: "",
+    bookingOfferRepeatCount: 0,
+    lastRequestedBookingText: "",
     pendingChosenSlotPair: "first",
     heldSlotUtcTime: "",
     notes: [],
@@ -1671,6 +1744,8 @@ async function confirmChosenSlot(ws, session, chosen) {
   session.lead.scheduled_time = chosen.localTime;
   session.lead.scheduled_time_utc = chosen.utcTime;
 
+  resetBookingLoopState(session);
+
   note(session, "slot_selected", chosen);
 
   session.currentStepIndex = getStepIndexById("collect_email");
@@ -2725,6 +2800,7 @@ async function handlePendingSlotConfirmation(ws, session, callerText) {
 async function handleBookingStep(ws, session, callerText) {
   const text = safeString(callerText);
   const direct = detectDirectBookingIntent(text);
+  session.lastRequestedBookingText = text;
 
   if (direct.day) {
     setBookingContext(session, direct.day, "");
@@ -2734,9 +2810,11 @@ async function handleBookingStep(ws, session, callerText) {
     setBookingContext(session, "", direct.daypart);
   }
 
+  // 1) User picked from currently offered slots
   const offeredChoice = chooseFromOfferedSlots(text, session);
   if (offeredChoice) {
     clearBookingOfferState(session);
+    resetBookingLoopState(session);
     await confirmChosenSlot(ws, session, offeredChoice);
     return;
   }
@@ -2748,12 +2826,25 @@ async function handleBookingStep(ws, session, callerText) {
     session.chosenBookingDaypart ||
     session.bookingContext.daypart;
 
+  // 2) If caller requested a specific time, refresh calendar before evaluating
+  if (callerRequestedSpecificTime(text)) {
+    sendVoice(ws, bookingAcknowledgementForRequest(text), session);
+
+    try {
+      await primeCalendlySlotsWrapper(session, true);
+    } catch (err) {
+      console.error("Calendly refresh during booking request failed:", err);
+    }
+  }
+
+  // 3) Exact or closest time request like "tomorrow at 3" or "6 PM"
   if (direct.hasTime) {
     const filtered = getSlotsForPreference(session, day, daypart);
 
     const exact = chooseSlotFromFilteredResponse(text, filtered);
     if (exact) {
       clearBookingOfferState(session);
+      resetBookingLoopState(session);
       await confirmChosenSlot(ws, session, exact);
       return;
     }
@@ -2768,13 +2859,47 @@ async function handleBookingStep(ws, session, callerText) {
         sendVoice(
           ws,
           `The closest I have is ${slotLabel(closest)}. Would that work for you?`,
-          session
+          session,
+          { isPreciseBooking: true }
         );
         return;
       }
     }
+
+    // If specific time requested but unavailable, try same day with broader search
+    const broaderSameDay = getSlotsForPreference(session, day, "");
+    if (broaderSameDay.length) {
+      offerConcreteSlots(
+        ws,
+        session,
+        broaderSameDay,
+        "I’m not seeing that exact time,"
+      );
+      return;
+    }
+
+    // Try all slots as last resort
+    const allSlots = getAllUsableSlots(session);
+    if (allSlots.length) {
+      offerConcreteSlots(
+        ws,
+        session,
+        allSlots,
+        "I’m not seeing that exact time,"
+      );
+      return;
+    }
+
+    sendVoice(
+      ws,
+      "It looks like I do not have that exact window open right now. Let me grab your email and we’ll send the next available time.",
+      session
+    );
+    session.currentStepIndex = getStepIndexById("collect_email");
+    return;
   }
 
+  // 4) Caller gave day/daypart preference only
   if (day || daypart) {
     const preferred = getSlotsForPreference(session, day, daypart);
 
@@ -2819,8 +2944,37 @@ async function handleBookingStep(ws, session, callerText) {
     return;
   }
 
+  // 5) If caller keeps rejecting repeated identical slots, switch strategy
+  if (
+    callerRejectedSlots(text) &&
+    session.bookingOfferRepeatCount >= 2
+  ) {
+    clearBookingOfferState(session);
+    resetBookingLoopState(session);
+
+    sendVoice(
+      ws,
+      "No problem. What works better for you — morning, afternoon, or evening?",
+      session
+    );
+    return;
+  }
+
+  // 6) No usable answer yet -> repeat current options once, then shift strategy
   const currentOffered = session.offeredSlotOptions || [];
   if (currentOffered.length) {
+    if (session.bookingOfferRepeatCount >= 2) {
+      clearBookingOfferState(session);
+      resetBookingLoopState(session);
+
+      sendVoice(
+        ws,
+        "Just so I can narrow it down better for you, do you prefer morning, afternoon, or evening?",
+        session
+      );
+      return;
+    }
+
     offerConcreteSlots(
       ws,
       session,
@@ -3223,6 +3377,7 @@ async function offerFreshSlotsAfterHoldLoss(ws, session, introLine = "") {
   session.pendingConfirmationSlot = null;
   session.awaitingSlotConfirmation = false;
   session.offeredSlotOptions = [];
+  resetBookingLoopState(session);
   session.bookingContext = { day: "", daypart: "" };
   session.chosenBookingDay = "";
   session.chosenBookingDaypart = "";
