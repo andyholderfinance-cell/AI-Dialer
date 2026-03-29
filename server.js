@@ -2566,7 +2566,7 @@ app.post("/dial", async (req, res) => {
 app.get("/testdial", async (req, res) => {
   try {
     const host = req.headers.host;
-    const phone = process.env.TEST_DIAL_NUMBER || "+18177090206";
+    const phone = process.env.TEST_DIAL_NUMBER || "+18177090198";
 
     const leadId = randomId();
     const session = buildSessionFromLead({
