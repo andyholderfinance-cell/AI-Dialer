@@ -3,8 +3,6 @@ require("dotenv").config();
 const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
-const crypto = require("crypto");
-const fetch = require("node-fetch");
 
 const {
   twilioNumber,
