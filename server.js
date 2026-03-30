@@ -2736,18 +2736,29 @@ async function handleUnknownMomentByType(ws, session, callerText, classification
   }
 
   if (plan.action === UNKNOWN_ACTIONS.AI_BRIEF_CLARIFY_THEN_RECENTER) {
-    const freestyleReply = await getUnknownObjectionReply(session, callerText);
-    const anchoredReply = buildUnknownAnchoredReply(session, freestyleReply);
-    const emotionLead = emotionAcknowledgement(session.lastDetectedEmotion);
+  const freestyleReply = await getUnknownObjectionReply(session, callerText);
+  const anchoredReply = buildUnknownAnchoredReply(session, freestyleReply);
+  const emotionLead = emotionAcknowledgement(session.lastDetectedEmotion);
 
+  sendVoice(
+    ws,
+    [emotionLead, anchoredReply].filter(Boolean).join(" "),
+    session
+  );
+
+  if (currentStep && isQuestionLike(currentStep)) {
     sendVoice(
       ws,
-      [emotionLead, anchoredReply].filter(Boolean).join(" "),
-      session
+      renderTemplate(currentStep.text, session.lead),
+      session,
+      { isFollowupPrompt: true }
     );
-    sendVoice(ws, `${recenterToFile()} ..., give me one second here`, session);
     return true;
-  }  
+  }
+
+  sendVoice(ws, recenterToFile(), session, { isFollowupPrompt: true });
+  return true;
+}  
 
    if (plan.action === UNKNOWN_ACTIONS.CLARIFY_THEN_RESUME) {
     const templated = getUnknownTemplateReply(classification.type, session);
@@ -2773,10 +2784,20 @@ async function handleUnknownMomentByType(ws, session, callerText, classification
   }
 
   const freestyleReply = await getUnknownObjectionReply(session, callerText);
-  sendVoice(ws, freestyleReply, session);
-  sendVoice(ws, `${recenterLine()} ..., give me one second here`, session);
+sendVoice(ws, freestyleReply, session);
+
+if (currentStep && isQuestionLike(currentStep)) {
+  sendVoice(
+    ws,
+    renderTemplate(currentStep.text, session.lead),
+    session,
+    { isFollowupPrompt: true }
+  );
   return true;
 }
+
+sendVoice(ws, recenterLine(), session, { isFollowupPrompt: true });
+return true;
 
 /**
  * ============================================================================
@@ -3985,10 +4006,22 @@ wss.on("connection", (ws, req) => {
 
       updateSessionToneFromText(session, callerText);
 
-        const interrupted = detectLikelyInterruption(session);
-        if (interrupted) {
-          note(session, "interruption", callerText);
-        }
+      const interrupted = detectLikelyInterruption(session);
+      if (interrupted) {
+        note(session, "interruption", callerText);
+
+      if (detectPossibleUnknownObjection(callerText)) {
+          clearObjectionState(session);
+
+      const classification = await classifyUnknownMomentHybrid(
+      session,
+      callerText
+      );
+
+    await handleUnknownMomentByType(ws, session, callerText, classification);
+    return;
+  }
+}
 
         if (session.heldSlotUtcTime) {
           extendSlotHold(session);
