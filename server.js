@@ -2798,6 +2798,7 @@ if (currentStep && isQuestionLike(currentStep)) {
 
 sendVoice(ws, recenterLine(), session, { isFollowupPrompt: true });
 return true;
+}
 
 /**
  * ============================================================================
