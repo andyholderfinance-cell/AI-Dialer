@@ -102,10 +102,6 @@ function humanize(text, options = {}) {
     result = result.replace(/^Yeah\s*/i, "Yeah so—");
   }
 
-  if (Math.random() < 0.10) {
-    result = result.replace(/^From what I'm seeing here/i, "What I'm seeing here is");
-  }
-
   if (Math.random() < 0.16 && !result.includes("...")) {
     result = result.replace(/,\s/g, ", ... ");
   }
@@ -276,8 +272,6 @@ function detectRepeatRequest(text) {
     "could you say that again",
     "come again",
     "sorry what",
-    "sorry",
-    "huh",
     "i didnt hear you",
     "i didn't hear you",
     "didnt catch that",
