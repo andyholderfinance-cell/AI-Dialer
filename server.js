@@ -753,6 +753,38 @@ function detectAmbiguousVerification(text) {
   ]);
 }
 
+function detectNonEnglish(text) {
+  const t = normalizeText(text);
+  if (!t || t.length < 4) return false;
+  const spanishPhrases = [
+    "no hablo", "no entiendo", "no entiendo ingles", "habla espanol",
+    "hablas espanol", "en espanol", "no se ingles", "solo hablo espanol",
+    "hola", "como estas", "que es esto", "no comprendo", "que paso",
+    "quien es", "para que", "que quiere", "bueno", "si senor", "si senora",
+  ];
+  return spanishPhrases.some((p) => t.includes(p));
+}
+
+function detectCancelAppointment(text) {
+  const t = normalizeText(text);
+  return containsAny(t, [
+    "cancel the appointment",
+    "cancel the meeting",
+    "cancel the call",
+    "i want to cancel",
+    "i need to cancel",
+    "actually never mind",
+    "never mind",
+    "i changed my mind",
+    "i don't want to do it anymore",
+    "i dont want to do it anymore",
+    "can you cancel that",
+    "please cancel",
+    "forget it",
+    "disregard that",
+  ]);
+}
+
 function detectNo(text) {
   const t = normalizeText(text);
   return (
@@ -4144,6 +4176,32 @@ wss.on("connection", (ws, req) => {
     return;
   }
 }
+
+        if (detectNonEnglish(callerText)) {
+          sendVoice(
+            ws,
+            "I'm sorry, I only speak English. I'll close this out and someone may follow up. Thank you.",
+            session
+          );
+          session.shouldEndCall = true;
+          setOutcome(session, "language_barrier");
+          releaseHeldSlotForSession(session);
+          return;
+        }
+
+        if (session.callOutcome === "booked" && detectCancelAppointment(callerText)) {
+          session.lead.scheduled_time = "";
+          session.lead.scheduled_time_utc = "";
+          setOutcome(session, "cancelled_after_booking");
+          session.shouldEndCall = true;
+          releaseHeldSlotForSession(session);
+          sendVoice(
+            ws,
+            "No problem at all. I'll go ahead and remove that from the calendar. If you change your mind, feel free to call us back. Have a great day.",
+            session
+          );
+          return;
+        }
 
         if (session.heldSlotUtcTime) {
           extendSlotHold(session);
