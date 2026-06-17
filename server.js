@@ -3633,7 +3633,7 @@ async function handleStepResponse(ws, session, callerText) {
 
   const isUnknownMoment =
     detectPossibleUnknownObjection(text) ||
-    (step.type === "question" && !matchedObjection);
+    (step.type === "question" && !matchedObjection && shouldDetectObjectionsAtStep(stepId));
 
   if (isUnknownMoment) {
     note(session, "unknown_objection", callerText);
