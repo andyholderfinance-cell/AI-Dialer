@@ -3170,6 +3170,20 @@ async function handlePreScriptAudio(ws, session, callerText) {
     return true;
   }
 
+  // Any unrecognized audio before the script starts means a human is on the line.
+  // Start the script rather than falling through to handleStepResponse.
+  if (!session.scriptStarted) {
+    session.screeningState = "human_connected";
+    session.scriptStarted = true;
+    session.currentStepIndex = getStepIndexById("intro_1");
+    sendVoice(
+      ws,
+      renderTemplate(getCurrentStep(session).text, session.lead),
+      session
+    );
+    return true;
+  }
+
   return false;
 }
 
