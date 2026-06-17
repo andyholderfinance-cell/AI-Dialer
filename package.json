@@ -21,6 +21,6 @@
     "ws": "^8.18.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.0"
+    "nodemon": "^3.1.14"
   }
 }

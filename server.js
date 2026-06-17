@@ -93,9 +93,9 @@ const {
   extractEmail,
 } = require("./src/helpers");
 
-const AI_REPLY_TIMEOUT_MS = Number(process.env.AI_REPLY_TIMEOUT_MS || 1200);
+const AI_REPLY_TIMEOUT_MS = Number(process.env.AI_REPLY_TIMEOUT_MS || 2500);
 const AI_CLASSIFIER_TIMEOUT_MS = Number(
-  process.env.AI_CLASSIFIER_TIMEOUT_MS || 900
+  process.env.AI_CLASSIFIER_TIMEOUT_MS || 1800
 );
 
 function shouldDetectObjectionsAtStep(stepId) {
@@ -629,6 +629,7 @@ function buildSessionFromLead(lead = {}) {
     lastMeaningfulBotStepId: "",
     lastPromptAt: 0,
     awaitingCallbackTime: false,
+    awaitingEmailConfirmation: false,
     callbackRequested: false,
     callbackReason: "",
     relativeAnswered: false,
@@ -724,6 +725,32 @@ function buildPromptFromCurrentStep(session) {
     SCRIPT_STEPS.length - 1
   );
   return parts.join(" ");
+}
+
+function detectAmbiguousVerification(text) {
+  const t = normalizeText(text);
+  return containsAny(t, [
+    "not sure",
+    "i'm not sure",
+    "im not sure",
+    "maybe",
+    "i think so",
+    "i think",
+    "i believe",
+    "i'm not certain",
+    "im not certain",
+    "might be",
+    "possibly",
+    "i don't know",
+    "i dont know",
+    "hold on",
+    "let me think",
+    "i have to check",
+    "i'd have to check",
+    "i would have to check",
+    "i'm not 100",
+    "im not 100",
+  ]);
 }
 
 function detectNo(text) {
@@ -1825,6 +1852,16 @@ function applySessionSlots(session) {
 
 setInterval(cleanupExpiredSlotHolds, SLOT_HOLD_CLEANUP_MS).unref();
 
+setInterval(() => {
+  const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+  for (const [id, sess] of callSessions.entries()) {
+    if (sess.createdAt < cutoff) {
+      releaseHeldSlotForSession(sess);
+      callSessions.delete(id);
+    }
+  }
+}, 5 * 60 * 1000).unref();
+
 /**
  * ============================================================================
  * CALENDLY
@@ -2735,12 +2772,11 @@ async function handleUnknownMomentByType(ws, session, callerText, classification
 
   if (plan.action === UNKNOWN_ACTIONS.AI_BRIEF_CLARIFY_THEN_RECENTER) {
   const freestyleReply = await getUnknownObjectionReply(session, callerText);
-  const anchoredReply = buildUnknownAnchoredReply(session, freestyleReply);
   const emotionLead = emotionAcknowledgement(session.lastDetectedEmotion);
 
   sendVoice(
     ws,
-    [emotionLead, anchoredReply].filter(Boolean).join(" "),
+    [emotionLead, freestyleReply].filter(Boolean).join(" "),
     session
   );
 
@@ -2762,12 +2798,11 @@ async function handleUnknownMomentByType(ws, session, callerText, classification
     const templated = getUnknownTemplateReply(classification.type, session);
     const aiReply =
       templated || (await getUnknownObjectionReply(session, callerText));
-    const anchoredReply = buildUnknownAnchoredReply(session, aiReply);
     const emotionLead = emotionAcknowledgement(session.lastDetectedEmotion);
 
     sendVoice(
       ws,
-      [emotionLead, anchoredReply].filter(Boolean).join(" "),
+      [emotionLead, aiReply].filter(Boolean).join(" "),
       session
     );
 
@@ -3010,13 +3045,19 @@ async function handleBookingStep(ws, session, callerText) {
     return;
   }
 
-  // 5) If caller keeps rejecting repeated identical slots, switch strategy
+  // 5) If caller keeps rejecting repeated identical slots, re-prime calendar and switch strategy
   if (
     callerRejectedSlots(text) &&
     session.bookingOfferRepeatCount >= 2
   ) {
     clearBookingOfferState(session);
     resetBookingLoopState(session);
+
+    try {
+      await primeCalendlySlotsWrapper(session, true);
+    } catch (err) {
+      console.error("Calendly re-prime on slot rejection failed:", err);
+    }
 
     sendVoice(
       ws,
@@ -3026,12 +3067,18 @@ async function handleBookingStep(ws, session, callerText) {
     return;
   }
 
-  // 6) No usable answer yet -> repeat current options once, then shift strategy
+  // 6) No usable answer yet -> repeat current options once, then re-prime and shift strategy
   const currentOffered = session.offeredSlotOptions || [];
   if (currentOffered.length) {
     if (session.bookingOfferRepeatCount >= 2) {
       clearBookingOfferState(session);
       resetBookingLoopState(session);
+
+      try {
+        await primeCalendlySlotsWrapper(session, true);
+      } catch (err) {
+        console.error("Calendly re-prime on repeat offer failed:", err);
+      }
 
       sendVoice(
         ws,
@@ -3188,6 +3235,36 @@ async function handleRelativeOrWrongParty(ws, session, callerText) {
 }
 
 async function handleCallbackCapture(ws, session, callerText) {
+  const t = normalizeText(callerText);
+  const wantsToResume = containsAny(t, [
+    "actually",
+    "wait",
+    "i have time",
+    "i have a minute",
+    "go ahead",
+    "never mind",
+    "nevermind",
+    "forget it",
+    "i can talk",
+    "i can talk now",
+    "lets do it",
+    "let's do it",
+    "i'm available",
+    "im available",
+    "i'm free",
+    "im free",
+  ]);
+
+  if (wantsToResume) {
+    session.awaitingCallbackTime = false;
+    session.callbackReason = "";
+    clearObjectionState(session);
+    note(session, "callback_cancelled_resumed", callerText);
+    sendVoice(ws, "No worries, let me pick back up where we were.", session);
+    sendNextPrompt(ws, session);
+    return;
+  }
+
   const callbackTime = detectCallbackTime(callerText);
   const callbackReason =
     session.callbackReason || detectCallbackReason(callerText);
@@ -3337,11 +3414,8 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
       return;
     }
 
-    sendVoice(
-      ws,
-      "Just so I update it correctly, is it more the cost, the qualifying part, or you just don't want to go over it?",
-      session
-    );
+    const classification = await classifyUnknownMomentHybrid(session, callerText);
+    await handleUnknownMomentByType(ws, session, callerText, classification);
     return;
   }
 
@@ -3404,11 +3478,8 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
       return;
     }
 
-    sendVoice(
-      ws,
-      "Just so I update it correctly, do you already have something in place, or are you just not concerned about it?",
-      session
-    );
+    const classification = await classifyUnknownMomentHybrid(session, callerText);
+    await handleUnknownMomentByType(ws, session, callerText, classification);
     return;
   }
 }
@@ -3506,30 +3577,18 @@ async function handleStepResponse(ws, session, callerText) {
       session.shouldEndCall = true;
       setOutcome(session, "do_not_call");
       releaseHeldSlotForSession(session);
-      sendVoice(
-        ws,
-        formatObjectionResponse(matchedObjection.response),
-        session
-      );
+      sendVoice(ws, formatObjectionResponse(matchedObjection.response), session, { skipHumanize: true });
       return;
     }
 
     if (matchedObjection.action === "callback_branch") {
-      sendVoice(
-        ws,
-        formatObjectionResponse(matchedObjection.response),
-        session
-      );
+      sendVoice(ws, formatObjectionResponse(matchedObjection.response), session, { skipHumanize: true });
       session.activeObjection = "callback_request";
       session.waitingForObjectionBranch = true;
       session.awaitingCallbackTime = true;
       session.callbackReason = detectCallbackReason(callerText);
       session.crm.callback_reason = session.callbackReason;
-      sendVoice(
-        ws,
-        "What works better for you, later today or tomorrow?",
-        session
-      );
+      sendVoice(ws, "What works better for you, later today or tomorrow?", session);
       return;
     }
 
@@ -3537,11 +3596,7 @@ async function handleStepResponse(ws, session, callerText) {
       session.activeObjection = "existing_coverage_detail";
       session.waitingForObjectionBranch = true;
       note(session, "has_existing_coverage", callerText);
-      sendVoice(
-        ws,
-        formatObjectionResponse(matchedObjection.response),
-        session
-      );
+      sendVoice(ws, formatObjectionResponse(matchedObjection.response), session, { skipHumanize: true });
       return;
     }
 
@@ -3551,11 +3606,7 @@ async function handleStepResponse(ws, session, callerText) {
         session.crm.no_mortgage = "Yes";
       }
 
-      sendVoice(
-        ws,
-        formatObjectionResponse(matchedObjection.response),
-        session
-      );
+      sendVoice(ws, formatObjectionResponse(matchedObjection.response), session, { skipHumanize: true });
       const postMode = getPostObjectionModeForId(matchedObjection.id);
       askPostObjectionFollowup(ws, session, postMode, matchedObjection.id);
       return;
@@ -3564,16 +3615,16 @@ async function handleStepResponse(ws, session, callerText) {
     if (matchedObjection.action === "branch_followup") {
       session.activeObjection = matchedObjection.id;
       session.waitingForObjectionBranch = true;
-      sendVoice(
-        ws,
-        formatObjectionResponse(matchedObjection.response),
-        session
-      );
+      sendVoice(ws, formatObjectionResponse(matchedObjection.response), session, { skipHumanize: true });
       return;
     }
   }
 
-  if (detectPossibleUnknownObjection(text)) {
+  const isUnknownMoment =
+    detectPossibleUnknownObjection(text) ||
+    (step.type === "question" && !matchedObjection);
+
+  if (isUnknownMoment) {
     note(session, "unknown_objection", callerText);
 
     if (shouldExitObjectionLoop(session)) {
@@ -3688,6 +3739,16 @@ async function handleStepResponse(ws, session, callerText) {
         return;
       }
 
+      if (detectAmbiguousVerification(text)) {
+        sendVoice(
+          ws,
+          `No worries, take your time. I have the address as ${session.lead.address}. Does that sound right?`,
+          session,
+          { isFollowupPrompt: true }
+        );
+        return;
+      }
+
       session.currentStepIndex = getStepIndexById("verify_loan");
       sendVoice(
         ws,
@@ -3725,6 +3786,16 @@ async function handleStepResponse(ws, session, callerText) {
           ws,
           renderTemplate(getCurrentStep(session).text, session.lead),
           session
+        );
+        return;
+      }
+
+      if (detectAmbiguousVerification(text)) {
+        sendVoice(
+          ws,
+          `No worries. I have the loan amount at about ${session.lead.loan_amount}. Does that sound close?`,
+          session,
+          { isFollowupPrompt: true }
         );
         return;
       }
@@ -3787,6 +3858,16 @@ async function handleStepResponse(ws, session, callerText) {
           ws,
           renderTemplate(getCurrentStep(session).text, session.lead),
           session
+        );
+        return;
+      }
+
+      if (detectAmbiguousVerification(text)) {
+        sendVoice(
+          ws,
+          `No worries. I have your age down as ${session.lead.age}. Is that still right?`,
+          session,
+          { isFollowupPrompt: true }
         );
         return;
       }
@@ -3857,19 +3938,47 @@ async function handleStepResponse(ws, session, callerText) {
     case "collect_email": {
       extendSlotHold(session);
 
-      const email = extractEmail(text);
+      if (session.awaitingEmailConfirmation) {
+        const t = normalizeText(text);
+        if (isAffirmative(text) || containsAny(t, ["correct", "right", "that's it", "thats it", "yes that's right"])) {
+          session.awaitingEmailConfirmation = false;
+          note(session, "email_confirmed", session.lead.email);
+        } else {
+          session.awaitingEmailConfirmation = false;
+          session.lead.email = "";
+          sendVoice(
+            ws,
+            "No problem. Let me get that again — what is your email address?",
+            session,
+            { isFollowupPrompt: true }
+          );
+          return;
+        }
+      } else {
+        const email = extractEmail(text);
 
-      if (!email) {
+        if (!email) {
+          sendVoice(
+            ws,
+            "I'm sorry, I didn't quite catch the email. Can you say that one more time for me?",
+            session
+          );
+          return;
+        }
+
+        session.lead.email = email;
+        note(session, "email_collected", session.lead.email);
+
+        const spoken = email.replace("@", " at ").replace(/\./g, " dot ");
+        session.awaitingEmailConfirmation = true;
         sendVoice(
           ws,
-          "I'm sorry, I didn't quite catch the email. Can you say that one more time for me?",
-          session
+          `Got it, let me read that back — ${spoken}. Is that correct?`,
+          session,
+          { isPreciseBooking: true }
         );
         return;
       }
-
-      session.lead.email = email;
-      note(session, "email_collected", session.lead.email);
 
       if (!session.pendingChosenSlot?.utcTime) {
         note(session, "manual_followup_email_only", {
@@ -3952,6 +4061,9 @@ async function handleStepResponse(ws, session, callerText) {
 
       const currentStep = getCurrentStep(session);
       if (currentStep && isQuestionLike(currentStep)) {
+        sendVoice(ws, pick(["Anyway,", "So,", "But going back,"]), session, {
+          isFollowupPrompt: true,
+        });
         sendVoice(
           ws,
           renderTemplate(currentStep.text, session.lead),
