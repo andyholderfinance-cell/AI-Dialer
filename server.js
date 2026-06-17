@@ -3631,9 +3631,15 @@ async function handleStepResponse(ws, session, callerText) {
     }
   }
 
+  const isSimpleAdvanceStep = ["intro_2", "intro_4"].includes(step.id);
+
   const isUnknownMoment =
-    detectPossibleUnknownObjection(text) ||
-    (step.type === "question" && !matchedObjection && shouldDetectObjectionsAtStep(step.id));
+    !isSimpleAdvanceStep &&
+    (detectPossibleUnknownObjection(text) ||
+    (step.type === "question" && !matchedObjection && shouldDetectObjectionsAtStep(step.id)));
+
+  if (isUnknownMoment) {
+    note(session, "unknown_objection", callerText);
 
   if (isUnknownMoment) {
     note(session, "unknown_objection", callerText);
