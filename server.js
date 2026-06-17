@@ -1182,10 +1182,7 @@ function buildShortRepeat(session) {
 
   const byStep = {
     intro_1: renderTemplate("Hey, is this {{first_name}}?", session.lead),
-    intro_2: renderTemplate(
-      `I'm just calling about the mortgage protection information tied to your loan with {{lender}}.`,
-      session.lead
-    ),
+    intro_2: `I'm just calling about the mortgage protection information tied to the home.`,
     intro_3:
       "From what I'm seeing, the mortgage protection request tied to the home never got fully reviewed on my end.",
     intro_4: `My job is just to verify the information and get you lined up with ${UNDERWRITER_NAME} so you guys can go over it.`,
