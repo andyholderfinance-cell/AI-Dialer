@@ -3641,9 +3641,6 @@ async function handleStepResponse(ws, session, callerText) {
   if (isUnknownMoment) {
     note(session, "unknown_objection", callerText);
 
-  if (isUnknownMoment) {
-    note(session, "unknown_objection", callerText);
-
     if (shouldExitObjectionLoop(session)) {
       session.shouldEndCall = true;
       setOutcome(session, "too_many_objections");
