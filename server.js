@@ -56,6 +56,12 @@ const {
 const callSessions = new Map();
 const slotHolds = new Map();
 
+// ============================================================
+// TRANSCRIPT LOGGING
+// ============================================================
+const callLogs = [];
+const MAX_CALL_LOGS = 50;
+
 /**
  * ============================================================================
  * HELPERS
@@ -617,6 +623,7 @@ function buildSessionFromLead(lead = {}) {
     pendingChosenSlotPair: "first",
     heldSlotUtcTime: "",
     notes: [],
+    transcript: [],
     createdAt: Date.now(),
     screeningState: "unknown",
     screeningCount: 0,
@@ -961,6 +968,8 @@ function buildVoiceMessage(text) {
 function sendVoice(ws, text, session = null, options = {}) {
   if (session) {
     session.lastBotMessage = text;
+    logTranscript(session, "bot", text);
+    if (session.shouldEndCall) scheduleHangup(ws, 6000);
 
     if (!options.isFollowupPrompt && isMeaningfulFollowupText(text)) {
       session.lastMeaningfulBotMessage = text;
@@ -995,6 +1004,25 @@ function note(session, type, value) {
     value,
     at: Date.now(),
   });
+}
+
+function logTranscript(session, role, text, meta = {}) {
+  if (!session || !text) return;
+  session.transcript.push({
+    role,
+    text: safeString(text),
+    step: safeString(getCurrentStep(session)?.id || ""),
+    timestamp: Date.now(),
+    ...meta,
+  });
+}
+
+function scheduleHangup(ws, delayMs = 5000) {
+  setTimeout(() => {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.close();
+    }
+  }, delayMs);
 }
 
 function updateSessionToneFromText(session, callerText) {
@@ -2315,7 +2343,7 @@ function buildUnknownResponsePlan(session, classification) {
 
     case UNKNOWN_OBJECTION_TYPES.OFF_TOPIC:
       return {
-        action: UNKNOWN_ACTIONS.REPEAT_LAST_STEP,
+        action: UNKNOWN_ACTIONS.AI_BRIEF_CLARIFY_THEN_RECENTER,
       };
 
     case UNKNOWN_OBJECTION_TYPES.IDENTITY_TRUST:
@@ -4055,6 +4083,7 @@ async function handleStepResponse(ws, session, callerText) {
         moveToNextStep(session);
         sendNextPrompt(ws, session);
         session.shouldEndCall = true;
+        scheduleHangup(ws, 9000);
       } catch (error) {
         console.error("Calendly booking error:", {
           message: error.message,
@@ -4156,6 +4185,7 @@ wss.on("connection", (ws, req) => {
 
       if (data.type === "prompt" && data.voicePrompt !== undefined) {
       const callerText = safeString(data.voicePrompt);
+      logTranscript(session, "lead", callerText);
       console.log("Caller said:", callerText);
 
       updateSessionToneFromText(session, callerText);
@@ -4213,6 +4243,7 @@ wss.on("connection", (ws, req) => {
           sendVoice(ws, "Thank you. Goodbye.", session, {
             isFollowupPrompt: true,
           });
+          scheduleHangup(ws, 4000);
           return;
         }
 
@@ -4319,6 +4350,23 @@ wss.on("connection", (ws, req) => {
 
     releaseHeldSlotForSession(session);
 
+    // Save completed call to callLogs
+    callLogs.unshift({
+      id: session.id,
+      startedAt: new Date(session.createdAt).toISOString(),
+      endedAt: new Date().toISOString(),
+      outcome: session.callOutcome,
+      lead: {
+        first_name: session.lead.first_name,
+        phone: session.lead.phone,
+        state: session.lead.state,
+      },
+      transcript: session.transcript,
+      notes: session.notes,
+      crm: session.crm,
+    });
+    if (callLogs.length > MAX_CALL_LOGS) callLogs.length = MAX_CALL_LOGS;
+
     console.log("Twilio disconnected from /conversationrelay", {
       leadId,
       sessionId: session.id,
@@ -4332,6 +4380,73 @@ wss.on("connection", (ws, req) => {
  * START SERVER
  * ============================================================================
  */
+
+// ============================================================
+// CALL LOG VIEWER
+// ============================================================
+const LOG_SECRET = process.env.LOG_SECRET || "";
+
+app.get("/logs", (req, res) => {
+  if (LOG_SECRET && req.query.key !== LOG_SECRET) {
+    return res.status(401).send("Unauthorized — add ?key=YOUR_SECRET to the URL");
+  }
+
+  const cards = callLogs.map((log) => {
+    const lines = (log.transcript || []).map((entry) => {
+      const time = new Date(entry.timestamp).toLocaleTimeString();
+      const color = entry.role === "bot" ? "#1a73e8" : "#2e7d32";
+      const label = entry.role === "bot" ? "🤖 BOT" : "🧑 LEAD";
+      const step = entry.step ? `<span style="color:#aaa;font-size:11px"> [${entry.step}]</span>` : "";
+      return `
+        <div style="padding:6px 0;border-bottom:1px solid #f5f5f5">
+          <span style="color:${color};font-weight:bold;font-size:12px">${label}</span>${step}
+          <span style="color:#bbb;font-size:11px;margin-left:8px">${time}</span>
+          <div style="margin-top:2px;padding-left:8px;color:#333">${entry.text}</div>
+        </div>`;
+    }).join("");
+
+    const outcomeColors = { booked: "#1b8a3e", in_progress: "#e67e00", hangup_or_goodbye: "#888" };
+    const outcomeColor = outcomeColors[log.outcome] || "#c0392b";
+
+    return `
+      <div style="border:1px solid #ddd;border-radius:10px;padding:20px;margin-bottom:28px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,0.06)">
+        <div style="margin-bottom:12px;font-size:13px;color:#555">
+          <strong style="font-size:15px;color:#222">${log.lead.first_name || "Unknown Lead"}</strong>
+          &nbsp;·&nbsp; ${log.lead.phone || "no phone"}
+          &nbsp;·&nbsp; <span style="background:${outcomeColor};color:#fff;padding:2px 8px;border-radius:12px;font-size:12px">${log.outcome}</span>
+          &nbsp;·&nbsp; ${log.lead.state || ""}
+          <br><span style="color:#aaa">Started: ${log.startedAt} &nbsp;|&nbsp; Ended: ${log.endedAt}</span>
+          &nbsp;|&nbsp; <a href="/logs/${log.id}${LOG_SECRET ? "?key=" + LOG_SECRET : ""}" style="color:#1a73e8;font-size:12px">Raw JSON</a>
+        </div>
+        <div style="font-family:monospace;font-size:13px;max-height:500px;overflow-y:auto;border:1px solid #eee;border-radius:6px;padding:10px;background:#fafafa">
+          ${lines || "<em style='color:#aaa'>No transcript recorded</em>"}
+        </div>
+      </div>`;
+  }).join("");
+
+  res.send(`<!DOCTYPE html>
+    <html>
+    <head>
+      <title>AI Dialer — Call Logs</title>
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+    </head>
+    <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:860px;margin:40px auto;padding:0 20px;background:#f7f7f7">
+      <h1 style="font-size:20px;margin-bottom:4px">📞 AI Dialer — Call Logs</h1>
+      <p style="color:#888;font-size:13px;margin-top:0">${callLogs.length} call(s) since last deploy &nbsp;·&nbsp; <em>Logs reset on redeploy</em></p>
+      <hr style="border:none;border-top:1px solid #ddd;margin:16px 0">
+      ${cards || `<div style="text-align:center;padding:60px 0;color:#aaa">No calls yet — run a test dial and refresh this page.</div>`}
+    </body>
+    </html>`);
+});
+
+app.get("/logs/:id", (req, res) => {
+  if (LOG_SECRET && req.query.key !== LOG_SECRET) {
+    return res.status(401).send("Unauthorized");
+  }
+  const log = callLogs.find((l) => l.id === req.params.id);
+  if (!log) return res.status(404).json({ error: "Call not found" });
+  res.json(log);
+});
 
 validateEnv();
 
