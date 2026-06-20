@@ -2710,8 +2710,8 @@ app.get("/testdial", async (req, res) => {
     const leadId = randomId();
     const session = buildSessionFromLead({
       phone,
-      first_name: "Andy",
-      full_name: "Andy Holder",
+      first_name: "John",
+      full_name: "John Smith",
       lender: "Rocket Mortgage",
       state: "Florida",
       address: "1 2 3 Main Street",
