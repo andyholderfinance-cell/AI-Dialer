@@ -9,7 +9,7 @@ const SCRIPT_STEPS = [
   {
     id: "intro_2",
     type: "question",
-    text: `Hey, this is ${CALLER_NAME}. I'm just giving you a quick call in regards to the mortgage life and disability protection information..., back when you closed on your home with {{lender}}... Does that sound familiar?`,
+    text: `Hey {{first_name}}, this is ${CALLER_NAME}. I'm just giving you a quick call in regards to the mortgage life and disability protection information..., back when you closed on your home with {{lender}}... Does that sound familiar?`,
   },
   {
     id: "intro_3",
