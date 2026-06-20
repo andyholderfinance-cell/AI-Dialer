@@ -432,12 +432,14 @@ function inferTimezoneFromState(state, defaultTimezone) {
 
 function formatLocalTime(utcIso, timezone) {
   const date = new Date(utcIso);
-  return new Intl.DateTimeFormat("en-US", {
+  const formatted = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
     hour: "numeric",
     minute: "2-digit",
     hour12: true,
   }).format(date);
+  // Remove ":00" so "8:00 AM" becomes "8 AM" — TTS reads "8:00 AM" as "eight o'clock AM"
+  return formatted.replace(/:00\s/, " ");
 }
 
 function formatLocalDayPhrase(utcIso, timezone) {
@@ -550,6 +552,10 @@ function normalizeSpokenEmail(text) {
   ];
 
   let cleaned = String(text).trim();
+
+  // Strip leading affirmatives so lead-in patterns can match
+  // e.g. "Yes. It's gonna be..." → "It's gonna be..."
+  cleaned = cleaned.replace(/^(yes|yeah|yep|sure|okay|ok)[.,]?\s*/i, '');
 
   // Strip letter clarifications like "D as in Danny", "M as in Mary"
   cleaned = cleaned.replace(/\s+as\s+in\s+\w+/gi, '');
