@@ -3452,92 +3452,76 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
   if (activeId === "not_interested") {
     const t = normalizeText(callerText);
 
+    // Path 1: Cost is the reason
     if (
       containsAny(t, [
         "cost",
         "price",
         "pricing",
         "too expensive",
-        "qualify",
-        "qualification",
-        "i don't think i'd qualify",
-        "i dont think id qualify",
-        "wondering if i'd qualify",
-        "wondering if i would qualify",
-        "not sure i qualify",
-        "dont think i qualify",
-        "don't think i qualify",
-        "i probably wouldnt qualify",
-        "i probably wouldn't qualify",
+        "afford",
+        "how much",
+        "monthly",
+        "premium",
       ])
     ) {
-      const isCost = containsAny(t, [
-        "cost",
-        "price",
-        "pricing",
-        "too expensive",
-      ]);
-
-      const responseText = formatObjectionResponse(
-        isCost
-          ? [
-              "Totally fair...",
-              "That’s actually why we set it up this way — the underwriter works with a bunch of A-rated companies,",
-              "so he can find whatever the most affordable option is for you.",
-              "And since the call’s free, worst case you just get clarity on your options and decide from there.",
-            ]
-          : [
-              "I completely understand...",
-              "That’s exactly why I’m calling — the underwriter works with multiple A-rated carriers,",
-              "so he can usually find something that fits based on your age and health.",
-            ]
-      );
-
-      sendVoice(ws, responseText, session);
-
-      session.waitingForObjectionBranch = false;
-      askPostObjectionFollowup(
+      sendVoice(
         ws,
-        session,
-        "brief_ack",
-        isCost ? "cost" : "qualify"
+        formatObjectionResponse([
+          "Totally fair...",
+          "That's actually why we set it up this way — the underwriter works with a bunch of A-rated companies,",
+          "so he can find whatever the most affordable option is for you.",
+          "And since the call's free, worst case you just get clarity on your options and decide from there.",
+        ]),
+        session
       );
+      session.waitingForObjectionBranch = false;
+      askPostObjectionFollowup(ws, session, "brief_ack", "cost");
       return;
     }
 
+    // Path 2: Already have something in place
     if (
       containsAny(t, [
-        "still not interested",
-        "not interested",
-        "no",
-        "nope",
-        "just not interested",
-        "i'm good",
-        "im good",
-        "leave it alone",
-        "i'm okay",
-        "im okay",
-        "no thank you",
-        "i'll pass",
-        "dont want it",
-        "don't want it",
+        "already have",
+        "already covered",
+        "i have",
+        "have insurance",
+        "have coverage",
+        "have something",
+        "have a policy",
+        "covered",
+        "taken care",
+        "already set",
+        "already got",
       ])
     ) {
-      session.activeObjection = "not_interested_coverage_check";
+      session.waitingForObjectionBranch = false;
+      session.activeObjection = "existing_coverage_detail";
+      note(session, "has_existing_coverage", callerText);
       sendVoice(
         ws,
-        "Okay, no worries. Before I close out the file, do you already have something in place for the home if something were to happen to you, or are you just not concerned about it?",
+        "Okay great, and is that a personal life policy, something through work, or something specifically set up for the mortgage?",
         session
       );
       return;
     }
 
-    const classification = await classifyUnknownMomentHybrid(session, callerText);
-    await handleUnknownMomentByType(ws, session, callerText, classification);
+    // Path 3: Just not interested — exit gracefully
+    session.shouldEndCall = true;
+    clearObjectionState(session);
+    setOutcome(session, "not_interested");
+    releaseHeldSlotForSession(session);
+    sendVoice(
+      ws,
+      "Okay, no worries at all. I'll go ahead and close out your file. Have a great rest of your day.",
+      session
+    );
+    scheduleHangup(ws, 6000);
     return;
   }
 
-  if (activeId === "not_interested_coverage_check") {
+    if (activeId === "not_interested_coverage_check") {
     const t = normalizeText(callerText);
 
     if (
