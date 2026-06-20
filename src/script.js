@@ -89,7 +89,7 @@ const SCRIPT_STEPS = [
   {
     id: "collect_email",
     type: "input",
-    text: "Alright {{first_name}}, and what is a good email address for the appointment confirmation?",
+    text: "Alright {{first_name}}, and what is a good email address for the appointment confirmation? Go ahead and spell it out for me.",
   },
   {
     id: "confirmation",

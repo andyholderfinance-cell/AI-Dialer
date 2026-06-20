@@ -829,7 +829,12 @@ function phraseMatch(input, trigger) {
   const b = normalizeText(trigger);
 
   if (!a || !b) return false;
-  if (a.includes(b) || b.includes(a)) return true;
+  if (a.includes(b)) return true;
+
+  // Only allow reverse containment (trigger contains input) when input is
+  // substantial — prevents short fragments like "it's" from matching "it's paid off"
+  const aWordCount = a.split(" ").filter(Boolean).length;
+  if (aWordCount >= 3 && b.includes(a)) return true;
 
   const aWords = new Set(a.split(" "));
   const bWords = b.split(" ").filter(Boolean);
@@ -4019,7 +4024,7 @@ async function handleStepResponse(ws, session, callerText) {
           session.lead.email = "";
           sendVoice(
             ws,
-            "No problem. Let me get that again — what is your email address?",
+            "No problem. Let me get that again — go ahead and spell it out for me.",
             session,
             { isFollowupPrompt: true }
           );
@@ -4031,7 +4036,7 @@ async function handleStepResponse(ws, session, callerText) {
         if (!email) {
           sendVoice(
             ws,
-            "I'm sorry, I didn't quite catch the email. Can you say that one more time for me?",
+            "I'm sorry, I didn't quite catch that. Can you spell out your email for me?",
             session
           );
           return;
@@ -4040,11 +4045,16 @@ async function handleStepResponse(ws, session, callerText) {
         session.lead.email = email;
         note(session, "email_collected", session.lead.email);
 
-        const spoken = email.replace("@", " at ").replace(/\./g, " dot ");
+        // Spell back the local part character by character, keep domain readable
+        const [localPart, domainPart] = email.split("@");
+        const spelledLocal = (localPart || "").split("").join(" ");
+        const spokenDomain = (domainPart || "").replace(/\./g, " dot ");
+        const spoken = `${spelledLocal} at ${spokenDomain}`;
+
         session.awaitingEmailConfirmation = true;
         sendVoice(
           ws,
-          `Got it, let me read that back — ${spoken}. Is that correct?`,
+          `Got it, let me spell that back — ${spoken}. Is that correct?`,
           session,
           { isPreciseBooking: true }
         );

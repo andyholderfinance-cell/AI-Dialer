@@ -526,7 +526,28 @@ function detectBlankish(text) {
 function normalizeSpokenEmail(text) {
   if (!text) return "";
 
-  return String(text)
+  // Strip common lead-in phrases before the actual email
+  // e.g. "a good email would be andy@gmail.com" → "andy@gmail.com"
+  const leadInPatterns = [
+    /^(a\s+)?good\s+email\s+(address\s+)?(would\s+be|is)\s+/i,
+    /^my\s+email\s+(address\s+)?(would\s+be|is)\s+/i,
+    /^the\s+email\s+(address\s+)?(would\s+be|is)\s+/i,
+    /^(that|it)\s+would\s+be\s+/i,
+    /^it('?s|\s+is)\s+/i,
+    /^you\s+can\s+(reach|use|send\s+it\s+to)\s+me\s+at\s+/i,
+    /^(the\s+)?email\s+is\s+/i,
+    /^(the\s+)?address\s+is\s+/i,
+    /^sure[,\s]+it('?s|\s+is)\s+/i,
+    /^yeah[,\s]+(it('?s|\s+is)\s+)?/i,
+    /^so[,\s]+(it('?s|\s+is)\s+)?/i,
+  ];
+
+  let cleaned = String(text).trim();
+  for (const pattern of leadInPatterns) {
+    cleaned = cleaned.replace(pattern, "");
+  }
+
+  return cleaned
     .toLowerCase()
     .replace(/\s*\(\s*at\s*\)\s*/g, "@")
     .replace(/\s*\[\s*at\s*\]\s*/g, "@")
