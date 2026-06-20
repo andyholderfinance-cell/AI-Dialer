@@ -550,6 +550,9 @@ function normalizeSpokenEmail(text) {
   ];
 
   let cleaned = String(text).trim();
+
+  // Strip letter clarifications like "D as in Danny", "M as in Mary"
+  cleaned = cleaned.replace(/\s+as\s+in\s+\w+/gi, '');
   for (const pattern of leadInPatterns) {
     cleaned = cleaned.replace(pattern, "");
   }
