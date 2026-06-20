@@ -4135,7 +4135,7 @@ async function handleStepResponse(ws, session, callerText) {
         moveToNextStep(session);
         sendNextPrompt(ws, session);
         session.shouldEndCall = true;
-        scheduleHangup(ws, 9000);
+        scheduleHangup(ws, 18000);
       } catch (error) {
         console.error("Calendly booking error:", {
           message: error.message,
