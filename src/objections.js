@@ -312,9 +312,9 @@ const OBJECTION_LIBRARY = [
       "i'll pass",
     ],
     response: [
-      "Gotcha...",
-      "just so I handle the file correctly — is that more because of cost,",
-      "or you're not sure you'd qualify?",
+      "Gotcha —",
+      "is that more because of cost,",
+      "or do you already have something in place for the mortgage?",
     ],
   },
   {
