@@ -330,12 +330,46 @@ function findClosestSlot(targetTimeText, slots) {
 
   if (!candidates.length || !slots.length) return null;
 
-  const targetDigits = candidates[0].replace(/[^\d]/g, "");
-  if (!targetDigits) return null;
+  // Parse target time from candidates — try each until one resolves cleanly
+  let targetTotal = null;
+  for (const cand of candidates) {
+    const c = String(cand).toLowerCase();
 
-  const targetHour = parseInt(targetDigits.slice(0, 2));
-  const targetMin = targetDigits.length > 2 ? parseInt(targetDigits.slice(2)) : 0;
-  const targetTotal = targetHour * 60 + targetMin;
+    // "3:00pm", "12:30am", "3:00" (colon format)
+    const colonM = c.match(/^(\d{1,2}):(\d{2})(am|pm)?$/);
+    if (colonM) {
+      let h = parseInt(colonM[1]);
+      const m = parseInt(colonM[2]);
+      const ap = colonM[3];
+      if (ap === "pm" && h !== 12) h += 12;
+      else if (ap === "am" && h === 12) h = 0;
+      else if (!ap && h <= 7) h += 12; // ambiguous bare time: treat 1–7 as PM
+      targetTotal = h * 60 + m;
+      break;
+    }
+
+    // "3pm", "12am" (no colon)
+    const ampmM = c.match(/^(\d{1,2})(am|pm)$/);
+    if (ampmM) {
+      let h = parseInt(ampmM[1]);
+      const ap = ampmM[2];
+      if (ap === "pm" && h !== 12) h += 12;
+      else if (ap === "am" && h === 12) h = 0;
+      targetTotal = h * 60;
+      break;
+    }
+
+    // bare hour "3" or "12" — treat 1–7 as PM
+    const bareM = c.match(/^(\d{1,2})$/);
+    if (bareM) {
+      let h = parseInt(bareM[1]);
+      if (h >= 1 && h <= 7) h += 12;
+      targetTotal = h * 60;
+      break;
+    }
+  }
+
+  if (targetTotal === null) return null;
 
   let closest = null;
   let smallestDiff = Infinity;
@@ -1686,8 +1720,13 @@ function spokenWordsToTimeCandidates(text) {
     const part3 = match[3] || "";
 
     if (part3 === "am" || part3 === "pm") {
+      // 3-group regex: e.g. "3:00am" → hour="3", part2="00", part3="am"
       candidates.add(`${hour}:00${part3}`);
       candidates.add(`${hour}${part3}`);
+    } else if (part2 === "am" || part2 === "pm") {
+      // 2-group am/pm regex: e.g. "3pm" → hour="3", part2="pm"
+      candidates.add(`${hour}:00${part2}`);
+      candidates.add(`${hour}${part2}`);
     } else if (part2 && ["00", "15", "30", "45"].includes(part2)) {
       candidates.add(`${hour}:${part2}`);
       candidates.add(`${hour}${part2}`);
@@ -1772,8 +1811,11 @@ function getDaypartForSlot(slot) {
       ? 0
       : hour;
 
-  return hour24 < 12 ? "morning" : "evening";
+  if (hour24 < 12) return "morning";
+  if (hour24 >= 17) return "evening";
+  return "afternoon"; // 12 PM–4:59 PM — not morning, not evening
 }
+
 
 function getFilteredSlots(session, day, daypart) {
   const slots = filterHeldSlotsForSession(session.availableSlots, session);
@@ -4047,7 +4089,7 @@ async function handleStepResponse(ws, session, callerText) {
 
         // Spell back the local part character by character, keep domain readable
         const [localPart, domainPart] = email.split("@");
-        const spelledLocal = (localPart || "").split("").join(" ");
+        const spelledLocal = (localPart || "").split("").join(", ");
         const spokenDomain = (domainPart || "").replace(/\./g, " dot ");
         const spoken = `${spelledLocal} at ${spokenDomain}`;
 

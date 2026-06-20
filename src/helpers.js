@@ -529,6 +529,10 @@ function normalizeSpokenEmail(text) {
   // Strip common lead-in phrases before the actual email
   // e.g. "a good email would be andy@gmail.com" → "andy@gmail.com"
   const leadInPatterns = [
+    /^okay[.,]?\s*/i,
+    /^ok[.,]?\s*/i,
+    /^(that|it)'?ll\s+be\s+/i,
+    /^(that|it)\s+will\s+be\s+/i,
     /^(a\s+)?good\s+email\s+(address\s+)?(would\s+be|is)\s+/i,
     /^my\s+email\s+(address\s+)?(would\s+be|is)\s+/i,
     /^the\s+email\s+(address\s+)?(would\s+be|is)\s+/i,
