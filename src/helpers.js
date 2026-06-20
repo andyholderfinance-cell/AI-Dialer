@@ -90,7 +90,10 @@ function humanize(text, options = {}) {
   if (tone === "guarded") openers = guardedOpeners;
   if (emotion === "busy") openers = busyOpeners;
 
-  if (Math.random() < 0.18) {
+  // Skip adding an opener if the response already starts with an acknowledgment word
+  // to avoid double-stacking like "Yeah so, Gotcha..." or "Alright, Okay..."
+  const alreadyAcknowledged = /^(gotcha|okay|alright|yeah|right|totally|i get|i got|absolutely|perfect|sure|understood|great)/i.test(result);
+  if (!alreadyAcknowledged && Math.random() < 0.18) {
     result = `${pick(openers)}${result}`;
   }
 
