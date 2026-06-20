@@ -544,6 +544,9 @@ function normalizeSpokenEmail(text) {
     /^sure[,\s]+it('?s|\s+is)\s+/i,
     /^yeah[,\s]+(it('?s|\s+is)\s+)?/i,
     /^so[,\s]+(it('?s|\s+is)\s+)?/i,
+    /^(that|it)'?s\s+gonna\s+be\s+/i,
+    /^gonna\s+be\s+/i,
+    /^(that|it)'?s\s+going\s+to\s+be\s+/i,
   ];
 
   let cleaned = String(text).trim();
