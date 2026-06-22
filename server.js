@@ -969,6 +969,84 @@ function detectDirectBookingIntent(text) {
   };
 }
 
+const WEEKDAY_INDEX = {
+  sunday: 0,
+  monday: 1,
+  tuesday: 2,
+  wednesday: 3,
+  thursday: 4,
+  friday: 5,
+  saturday: 6,
+};
+
+// Map a spoken weekday request ("Friday", "next Tuesday") to the dayPhrase the
+// available slots actually use. Handles the case where the requested weekday is
+// today/tomorrow (slots label those "today"/"tomorrow", not by weekday name).
+// Returns "" if no available slot falls on that weekday (e.g. outside the
+// 7-day Calendly window).
+function resolveWeekdayToDayPhrase(text, session) {
+  const t = normalizeText(text);
+
+  let targetIdx = null;
+  for (const [name, idx] of Object.entries(WEEKDAY_INDEX)) {
+    if (t.includes(name)) {
+      targetIdx = idx;
+      break;
+    }
+  }
+  if (targetIdx === null) return "";
+
+  for (const slot of session.availableSlots || []) {
+    const wdName = new Intl.DateTimeFormat("en-US", {
+      timeZone: slot.timezone,
+      weekday: "long",
+    })
+      .format(new Date(slot.utcTime))
+      .toLowerCase();
+
+    if (WEEKDAY_INDEX[wdName] === targetIdx) {
+      return slot.dayPhrase;
+    }
+  }
+
+  return "";
+}
+
+const NAME_STOPWORDS = new Set([
+  "he", "she", "her", "him", "his", "hers", "me", "my", "mine", "we", "us",
+  "they", "them", "it", "its", "this", "that", "there", "here", "who", "whom",
+  "yes", "yeah", "yep", "yup", "no", "nope", "sure", "ok", "okay", "fine",
+  "good", "great", "correct", "right", "speaking", "calling", "about", "the",
+  "a", "an", "not", "mister", "mr", "mrs", "ms", "miss", "sir", "maam", "wife",
+  "husband", "son", "daughter", "mom", "dad", "mother", "father", "brother",
+  "sister", "friend", "neighbor", "guy", "person", "homeowner", "owner",
+  "spouse", "partner", "true", "real", "legit", "busy", "sorry",
+]);
+
+// Pull a self-introduced name from the caller's greeting ("this is Jim",
+// "it's Jim", "my name is Jim"). Returns a capitalized name only when it's a
+// real name different from the one already on file; otherwise null.
+function extractSpokenName(text, currentFirstName = "") {
+  const m = safeString(text).match(
+    /\b(?:this is|it'?s|my name is|my name'?s|name is|name'?s)\s+([A-Za-z]+)/i
+  );
+  if (!m) return null;
+
+  const candidate = m[1].toLowerCase();
+  if (NAME_STOPWORDS.has(candidate)) return null;
+
+  const name = candidate.charAt(0).toUpperCase() + candidate.slice(1);
+
+  if (
+    currentFirstName &&
+    name.toLowerCase() === safeString(currentFirstName).toLowerCase()
+  ) {
+    return null;
+  }
+
+  return name;
+}
+
 function detectObjection(text) {
   const t = normalizeText(text);
   if (!t) return null;
@@ -3020,6 +3098,13 @@ async function handleBookingStep(ws, session, callerText) {
   const direct = detectDirectBookingIntent(text);
   session.lastRequestedBookingText = text;
 
+  // Support weekday requests ("Friday at 6 PM", "next Tuesday") by resolving the
+  // weekday to the dayPhrase the slots use. Only when today/tomorrow wasn't said.
+  if (!direct.day) {
+    const weekdayPhrase = resolveWeekdayToDayPhrase(text, session);
+    if (weekdayPhrase) direct.day = weekdayPhrase;
+  }
+
   if (direct.day) {
     setBookingContext(session, direct.day, "");
   }
@@ -3799,18 +3884,29 @@ async function handleStepResponse(ws, session, callerText) {
     case "intro_1": {
       const t = normalizeText(text);
 
-      const confirmedIdentity = containsAny(t, [
-        "yes",
-        "yeah",
-        "yep",
-        "speaking",
-        "this is he",
-        "this is she",
-        "this is",
-        "hello",
-        "hi",
-        "hey",
-      ]);
+      // Capture a corrected name ("this is Jim", "it's Jim") so the rest of the
+      // call greets them by the name they actually gave, not the file's.
+      const spokenName = extractSpokenName(text, session.lead.first_name);
+      if (spokenName) {
+        session.lead.first_name = spokenName;
+        session.lead.full_name = spokenName;
+        note(session, "name_corrected", spokenName);
+      }
+
+      const confirmedIdentity =
+        Boolean(spokenName) ||
+        containsAny(t, [
+          "yes",
+          "yeah",
+          "yep",
+          "speaking",
+          "this is he",
+          "this is she",
+          "this is",
+          "hello",
+          "hi",
+          "hey",
+        ]);
 
       const asksWho = containsAny(t, [
         "who is this",
