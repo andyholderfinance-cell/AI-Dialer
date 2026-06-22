@@ -326,13 +326,12 @@ function bookingAcknowledgementForRequest(text) {
   return "Gotcha, let me see what else I have open.";
 }
 
-function findClosestSlot(targetTimeText, slots) {
+// Parse a spoken time request into minutes-of-day (e.g. "10 AM" -> 600), or null.
+function parseRequestedMinutes(targetTimeText) {
   const candidates = spokenWordsToTimeCandidates(targetTimeText);
+  if (!candidates.length) return null;
 
-  if (!candidates.length || !slots.length) return null;
-
-  // Parse target time from candidates — try each until one resolves cleanly
-  let targetTotal = null;
+  // Try each candidate until one resolves cleanly
   for (const cand of candidates) {
     const c = String(cand).toLowerCase();
 
@@ -345,8 +344,7 @@ function findClosestSlot(targetTimeText, slots) {
       if (ap === "pm" && h !== 12) h += 12;
       else if (ap === "am" && h === 12) h = 0;
       else if (!ap && h <= 7) h += 12; // ambiguous bare time: treat 1–7 as PM
-      targetTotal = h * 60 + m;
-      break;
+      return h * 60 + m;
     }
 
     // "3pm", "12am" (no colon)
@@ -356,8 +354,7 @@ function findClosestSlot(targetTimeText, slots) {
       const ap = ampmM[2];
       if (ap === "pm" && h !== 12) h += 12;
       else if (ap === "am" && h === 12) h = 0;
-      targetTotal = h * 60;
-      break;
+      return h * 60;
     }
 
     // bare hour "3" or "12" — treat 1–7 as PM
@@ -365,30 +362,40 @@ function findClosestSlot(targetTimeText, slots) {
     if (bareM) {
       let h = parseInt(bareM[1]);
       if (h >= 1 && h <= 7) h += 12;
-      targetTotal = h * 60;
-      break;
+      return h * 60;
     }
   }
 
-  if (targetTotal === null) return null;
+  return null;
+}
+
+// Minutes-of-day for a slot's local time (e.g. "10:30 AM" -> 630), or null.
+function slotMinutesOfDay(slot) {
+  const match = safeString(slot.localTime).match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
+  if (!match) return null;
+
+  let hour = parseInt(match[1]);
+  const min = parseInt(match[2]);
+  const ap = match[3].toLowerCase();
+
+  if (ap === "pm" && hour !== 12) hour += 12;
+  if (ap === "am" && hour === 12) hour = 0;
+
+  return hour * 60 + min;
+}
+
+function findClosestSlot(targetTimeText, slots) {
+  const targetTotal = parseRequestedMinutes(targetTimeText);
+  if (targetTotal === null || !slots.length) return null;
 
   let closest = null;
   let smallestDiff = Infinity;
 
   for (const slot of slots) {
-    const match = slot.localTime.match(/(\d{1,2}):(\d{2})\s*(AM|PM)/i);
-    if (!match) continue;
+    const total = slotMinutesOfDay(slot);
+    if (total === null) continue;
 
-    let hour = parseInt(match[1]);
-    const min = parseInt(match[2]);
-    const ap = match[3].toLowerCase();
-
-    if (ap === "pm" && hour !== 12) hour += 12;
-    if (ap === "am" && hour === 12) hour = 0;
-
-    const total = hour * 60 + min;
     const diff = Math.abs(total - targetTotal);
-
     if (diff < smallestDiff) {
       smallestDiff = diff;
       closest = slot;
@@ -3052,16 +3059,25 @@ async function handleBookingStep(ws, session, callerText) {
   if (direct.hasTime) {
     const filtered = getSlotsForPreference(session, day, daypart);
 
-    const exact = chooseSlotFromFilteredResponse(text, filtered);
-    if (exact) {
+    const matched = chooseSlotFromFilteredResponse(text, filtered);
+
+    // Only book silently if the matched slot is actually the time they asked for.
+    // A loose/hour-level match (e.g. "10" matching a 10:30 slot) must be confirmed,
+    // not silently rebooked to a different time.
+    const requestedMin = parseRequestedMinutes(text);
+    const isExactMatch =
+      matched &&
+      (requestedMin === null || slotMinutesOfDay(matched) === requestedMin);
+
+    if (matched && isExactMatch) {
       clearBookingOfferState(session);
       resetBookingLoopState(session);
-      await confirmChosenSlot(ws, session, exact);
+      await confirmChosenSlot(ws, session, matched);
       return;
     }
 
     if (filtered.length) {
-      const closest = findClosestSlot(text, filtered);
+      const closest = matched || findClosestSlot(text, filtered);
 
       if (closest) {
         session.pendingConfirmationSlot = closest;
