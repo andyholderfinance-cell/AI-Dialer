@@ -3461,6 +3461,34 @@ async function handleRelativeOrWrongParty(ws, session, callerText) {
 
 async function handleCallbackCapture(ws, session, callerText) {
   const t = normalizeText(callerText);
+
+  // If the caller is actually handing us a day/time to book ("Friday at 4 PM",
+  // "how about Thursday", "tomorrow at 2"), resume booking instead of swallowing
+  // it as a callback or a generic "resume" and re-asking. Skip this when the
+  // callback is for a DIFFERENT person (relative/gatekeeper/not-available), where
+  // a time legitimately means "call the homeowner back then."
+  const deferringToAnotherPerson = [
+    "relative_answered",
+    "person_not_available",
+    "spouse_gatekeeper",
+  ].includes(session.callbackReason);
+
+  if (!deferringToAnotherPerson) {
+    const booking = detectDirectBookingIntent(callerText);
+    const weekday = booking.day
+      ? ""
+      : resolveWeekdayToDayPhrase(callerText, session);
+
+    if (booking.hasTime || booking.day || weekday) {
+      session.awaitingCallbackTime = false;
+      session.callbackReason = "";
+      clearObjectionState(session);
+      session.currentStepIndex = getStepIndexById("offer_day_choice");
+      await handleBookingStep(ws, session, callerText);
+      return;
+    }
+  }
+
   const wantsToResume = containsAny(t, [
     "actually",
     "wait",
