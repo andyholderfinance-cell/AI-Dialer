@@ -2796,13 +2796,13 @@ app.post("/dial", async (req, res) => {
 app.get("/testdial", async (req, res) => {
   try {
     const host = req.headers.host;
-    const phone = process.env.TEST_DIAL_NUMBER || "+14077249767";
+    const phone = process.env.TEST_DIAL_NUMBER || "+18175842356";
 
     const leadId = randomId();
     const session = buildSessionFromLead({
       phone,
-      first_name: "Gabriel",
-      full_name: "Gabriel Smith",
+      first_name: "Jon",
+      full_name: "Jon Smith",
       lender: "Rocket Mortgage",
       state: "Florida",
       address: "1 2 3 Main Street",
