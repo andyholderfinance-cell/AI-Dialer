@@ -449,6 +449,12 @@ function detectPossibleUnknownObjection(text) {
   const t = normalizeText(text);
   if (!t) return false;
 
+  // A direct question back to the bot ("did you catch the game?") is an
+  // off-topic tangent the fixed keyword list below won't catch. Flag it so it
+  // routes to the AI acknowledge-and-recenter path instead of being treated as
+  // an answer. (Known objection-questions are matched earlier by detectObjection.)
+  if (isQuestionToBot(text)) return true;
+
   const objectionSignals = [
     "what",
     "why",
@@ -1085,6 +1091,29 @@ function extractSpokenName(text, currentFirstName = "") {
   }
 
   return name;
+}
+
+// True only when the lead is actively CORRECTING their name, not just confirming
+// it. At intro_1 we already asked "is this {name}?", so a bare "this is X" is
+// almost always a confirmation (or a mis-transcription, e.g. Test 13 heard
+// "Darn"). We only overwrite the seeded name when there's an explicit correction
+// cue, so a mis-hear can't rename the lead.
+function mentionsNameCorrection(text) {
+  const t = normalizeText(text);
+  return containsAny(t, [
+    "no",
+    "nope",
+    "actually",
+    "wrong",
+    "it s not",
+    "thats not",
+    "that s not",
+    "is not",
+    "isn t",
+    "my name is",
+    "my name s",
+    "name is",
+  ]);
 }
 
 function detectObjection(text) {
@@ -3960,9 +3989,13 @@ async function handleStepResponse(ws, session, callerText) {
     case "intro_1": {
       const t = normalizeText(text);
 
-      // Capture a corrected name ("this is Jim", "it's Jim") so the rest of the
-      // call greets them by the name they actually gave, not the file's.
-      const spokenName = extractSpokenName(text, session.lead.first_name);
+      // Capture a corrected name ONLY when the lead is actually correcting it
+      // ("no, it's Jim" / "my name is Jim"). A bare confirmation like "this is
+      // him" — or a mis-transcription such as "this is Darn" — must NOT overwrite
+      // the seeded name (Test 13 renamed the lead "Darn" the whole call).
+      const spokenName = mentionsNameCorrection(text)
+        ? extractSpokenName(text, session.lead.first_name)
+        : null;
       if (spokenName) {
         session.lead.first_name = spokenName;
         session.lead.full_name = spokenName;
