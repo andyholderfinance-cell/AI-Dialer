@@ -131,6 +131,46 @@ function isAffirmative(text) {
   ]);
 }
 
+// A real confirmation — used to GATE the verify steps so we only advance when
+// the lead actually confirms. Absence of a "no" is NOT a yes (Test 13: the bot
+// marched through verification on off-topic non-answers). Uses word boundaries
+// so "incorrect" / "not right" never read as a confirmation.
+function isConfirmation(text) {
+  if (isAffirmative(text)) return true;
+  const t = normalizeText(text);
+  if (/\b(incorrect|not right|not correct|that s not right|thats not right)\b/.test(t)) {
+    return false;
+  }
+  return /\b(correct|exactly|yup|mhm|uh huh|that s it|thats it|that s right|thats right|that s me|thats me|still correct|still right)\b/.test(
+    t
+  );
+}
+
+// The lead is asking the BOT a question instead of answering (off-topic tangent).
+// Catches "did you catch the game?" style derails that the keyword-based
+// unknown-objection detector misses.
+function isQuestionToBot(text) {
+  const t = normalizeText(text);
+  if (!t) return false;
+  return (
+    /\b(did|do|does|are|is|have|has|had|can|could|would|will|were|was)\s+(you|ya|u)\b/.test(
+      t
+    ) || /^(what|why|how|when|where|who|which)\b/.test(t)
+  );
+}
+
+// Off-topic / unrecognized answer at a verify step: acknowledge briefly and
+// re-ask the SAME question instead of advancing. Escalates wording so repeated
+// tangents don't sound robotic.
+function handleVerifyOffTopic(ws, session, reaskLine) {
+  session.verifyOffTopicCount = (session.verifyOffTopicCount || 0) + 1;
+  const ack =
+    session.verifyOffTopicCount >= 2
+      ? "I hear you — I do need to get your file confirmed first, though."
+      : "No problem — let me just finish confirming your file real quick.";
+  sendVoice(ws, `${ack} ${reaskLine}`, session, { isFollowupPrompt: true });
+}
+
 function isNegative(text) {
   const t = normalizeText(text);
   return containsAny(t, [
@@ -4028,6 +4068,16 @@ async function handleStepResponse(ws, session, callerText) {
         return;
       }
 
+      if (!isConfirmation(text)) {
+        handleVerifyOffTopic(
+          ws,
+          session,
+          `I have your address as ${session.lead.address}. Is that correct?`
+        );
+        return;
+      }
+
+      session.verifyOffTopicCount = 0;
       session.currentStepIndex = getStepIndexById("verify_loan");
       sendVoice(
         ws,
@@ -4079,6 +4129,16 @@ async function handleStepResponse(ws, session, callerText) {
         return;
       }
 
+      if (!isConfirmation(text)) {
+        handleVerifyOffTopic(
+          ws,
+          session,
+          `I have the loan amount at about ${session.lead.loan_amount}. Is that correct?`
+        );
+        return;
+      }
+
+      session.verifyOffTopicCount = 0;
       session.currentStepIndex = getStepIndexById("verify_coborrower");
       sendVoice(
         ws,
@@ -4111,6 +4171,16 @@ async function handleStepResponse(ws, session, callerText) {
     }
 
     case "verify_coborrower": {
+      // Don't capture an off-topic question as the co-borrower's name.
+      if (isQuestionToBot(text) && !isConfirmation(text)) {
+        handleVerifyOffTopic(
+          ws,
+          session,
+          "Is it just you paying for the home, or is there a co-borrower?"
+        );
+        return;
+      }
+
       if (containsAny(normalized, ["no", "nobody", "no one", "just me"])) {
         session.lead.co_borrower = "No";
       } else {
@@ -4119,6 +4189,7 @@ async function handleStepResponse(ws, session, callerText) {
 
       note(session, "co_borrower_answer", session.lead.co_borrower);
 
+      session.verifyOffTopicCount = 0;
       session.currentStepIndex = getStepIndexById("verify_age");
       sendVoice(
         ws,
@@ -4151,6 +4222,16 @@ async function handleStepResponse(ws, session, callerText) {
         return;
       }
 
+      if (!isConfirmation(text)) {
+        handleVerifyOffTopic(
+          ws,
+          session,
+          `I have your age down as ${session.lead.age}. Is that still correct?`
+        );
+        return;
+      }
+
+      session.verifyOffTopicCount = 0;
       session.currentStepIndex = getStepIndexById("underwriter_intro");
       sendNextPrompt(ws, session);
       return;
