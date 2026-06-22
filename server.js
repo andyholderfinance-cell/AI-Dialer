@@ -78,6 +78,7 @@ const {
   naturalAck,
   recenterLine,
   humanize,
+  startsWithAcknowledgment,
   detectConversationEmotion,
   nextConversationTone,
   emotionAcknowledgement,
@@ -632,6 +633,7 @@ function buildSessionFromLead(lead = {}) {
     pendingPromptEndStepId: null,
     activeObjection: null,
     waitingForObjectionBranch: false,
+    notInterestedQualified: false,
     waitingForCoverageTypeAnswer: false,
     waitingForPostObjectionAck: false,
     postObjectionMode: null,
@@ -984,14 +986,18 @@ function formatObjectionResponse(lines) {
     "From what I'm seeing here,",
   ];
 
-  const opener = Math.random() < 0.6 ? pick(openers) : "";
-
   const body = lines
     .map((line) => {
       if (safeString(line).includes("[PAUSE")) return "...";
       return line;
     })
     .join(" ");
+
+  // Don't prepend an opener if the script line already starts with an
+  // acknowledgment ("Gotcha —", "Totally fair", "Okay great", etc.).
+  // Otherwise we stack two openers: "Yeah so, Totally fair...".
+  const opener =
+    !startsWithAcknowledgment(body) && Math.random() < 0.6 ? pick(openers) : "";
 
   return opener ? `${opener} ${body}` : body;
 }
@@ -3715,8 +3721,31 @@ async function handleStepResponse(ws, session, callerText) {
     }
 
     if (matchedObjection.action === "branch_followup") {
+      // Memory: if we've already walked the lead through the not_interested
+      // qualifier once (cost vs. already-have), a repeat "not interested" means
+      // they've decided. Don't re-ask the same question — exit gracefully.
+      if (
+        matchedObjection.id === "not_interested" &&
+        session.notInterestedQualified
+      ) {
+        session.shouldEndCall = true;
+        clearObjectionState(session);
+        setOutcome(session, "not_interested");
+        releaseHeldSlotForSession(session);
+        sendVoice(
+          ws,
+          "Okay, no worries at all. I'll go ahead and close out your file. Have a great rest of your day.",
+          session
+        );
+        scheduleHangup(ws, 6000);
+        return;
+      }
+
       session.activeObjection = matchedObjection.id;
       session.waitingForObjectionBranch = true;
+      if (matchedObjection.id === "not_interested") {
+        session.notInterestedQualified = true;
+      }
       sendVoice(ws, formatObjectionResponse(matchedObjection.response), session, { skipHumanize: true });
       return;
     }

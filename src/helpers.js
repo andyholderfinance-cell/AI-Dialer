@@ -47,6 +47,17 @@ function recenterLine() {
   ]);
 }
 
+// Matches a leading acknowledgment word/phrase so we never stack a second one
+// on top (e.g. "Yeah so, Gotcha..." or "No worries, Totally fair...").
+// Shared by humanize() and formatObjectionResponse() so both opener systems
+// stay in sync.
+const ACKNOWLEDGMENT_PREFIX =
+  /^(gotcha|okay|alright|yeah|right|totally|i get|i got|absolutely|perfect|sure|understood|great|no worries|i hear|i understand|fair enough|of course|i appreciate)/i;
+
+function startsWithAcknowledgment(text) {
+  return ACKNOWLEDGMENT_PREFIX.test(safeString(text).trim());
+}
+
 function humanize(text, options = {}) {
   const raw = safeString(text).trim();
   if (!raw) return raw;
@@ -92,7 +103,7 @@ function humanize(text, options = {}) {
 
   // Skip adding an opener if the response already starts with an acknowledgment word
   // to avoid double-stacking like "Yeah so, Gotcha..." or "Alright, Okay..."
-  const alreadyAcknowledged = /^(gotcha|okay|alright|yeah|right|totally|i get|i got|absolutely|perfect|sure|understood|great)/i.test(result);
+  const alreadyAcknowledged = startsWithAcknowledgment(result);
   if (!alreadyAcknowledged && Math.random() < 0.18) {
     result = `${pick(openers)}${result}`;
   }
@@ -597,6 +608,7 @@ module.exports = {
   naturalAck,
   recenterLine,
   humanize,
+  startsWithAcknowledgment,
   detectConversationEmotion,
   nextConversationTone,
   emotionAcknowledgement,
