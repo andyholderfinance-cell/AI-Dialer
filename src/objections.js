@@ -403,7 +403,7 @@ const OBJECTION_LIBRARY = [
       "are you a machine",
     ],
     response: [
-      "No, I'm a real person. I'm just the case worker assigned to your file on my end.",
+      "Yeah, good catch — I'm an automated assistant on the scheduling side. The actual review is with Andy, a licensed underwriter, a real person who goes over everything with you and answers your questions. My part is just to verify the file and get you set up with him.",
     ],
   },
   {
