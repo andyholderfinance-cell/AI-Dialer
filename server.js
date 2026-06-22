@@ -3803,9 +3803,16 @@ async function handleStepResponse(ws, session, callerText) {
     SCRIPT_STEPS.slice(getStepIndexById("intro_3")).map((s) => s.id)
   );
 
-  const matchedObjection = objectionEnabledSteps.has(step.id)
-    ? detectObjection(text)
-    : null;
+  // Steps where the lead is dictating raw data (spelling an email, etc.).
+  // Phrase-based objection/unknown detection must NOT run here — a spelled-out
+  // email is an arbitrary letter stream that will false-match objection triggers
+  // (e.g. "i_rent" firing mid-spell in Test 12).
+  const DATA_DICTATION_STEPS = new Set(["collect_email"]);
+
+  const matchedObjection =
+    objectionEnabledSteps.has(step.id) && !DATA_DICTATION_STEPS.has(step.id)
+      ? detectObjection(text)
+      : null;
 
   if (matchedObjection) {
     markObjection(session, matchedObjection, step.id);
@@ -3882,6 +3889,7 @@ async function handleStepResponse(ws, session, callerText) {
 
   const isUnknownMoment =
     shouldDetectObjectionsAtStep(step.id) &&
+    !DATA_DICTATION_STEPS.has(step.id) &&
     detectPossibleUnknownObjection(text);
 
   if (isUnknownMoment) {
