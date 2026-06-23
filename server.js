@@ -783,6 +783,10 @@ function buildSessionFromLead(lead = {}) {
     lastPromptAt: 0,
     awaitingCallbackTime: false,
     awaitingEmailConfirmation: false,
+    awaitingHoldResume: false,
+    emailLocalBuffer: "",
+    emailAttempts: 0,
+    turnSeq: 0,
     callbackRequested: false,
     callbackReason: "",
     relativeAnswered: false,
@@ -3696,6 +3700,7 @@ function markObjection(session, matchedObjection, currentStepId) {
 }
 
 async function handleActiveObjectionBranch(ws, session, callerText) {
+  const entrySeq = session.turnSeq;
   const activeId = session.activeObjection;
 
   if (activeId === "callback_request") {
@@ -3859,6 +3864,7 @@ async function handleActiveObjectionBranch(ws, session, callerText) {
     }
 
     const classification = await classifyUnknownMomentHybrid(session, callerText);
+    if (session.turnSeq !== entrySeq) return; // superseded by a newer utterance
     await handleUnknownMomentByType(ws, session, callerText, classification);
     return;
   }
@@ -3922,6 +3928,7 @@ async function offerFreshSlotsAfterHoldLoss(ws, session, introLine = "") {
 }
 
 async function handleStepResponse(ws, session, callerText) {
+  const entrySeq = session.turnSeq;
   const step = getCurrentStep(session);
   console.log("STEP:", step?.id, "| USER:", callerText);
 
@@ -3943,9 +3950,10 @@ async function handleStepResponse(ws, session, callerText) {
   if (relativeHandled) return;
 
   // A momentary pause ("hold on", "give me a second", "I'll be right back") is
-  // not an objection or a callback request. Acknowledge and hold the current
-  // step instead of letting the classifier derail into offering a callback
-  // (Test 14). Skip while spelling data or already collecting a callback time.
+  // not an objection or a callback request. Acknowledge and WAIT — don't re-ask
+  // into dead air while they're away (Test 15 feedback). We re-ask the current
+  // step only when they come back. Skip while spelling data or collecting a
+  // callback time.
   if (
     step.id !== "collect_email" &&
     !session.awaitingCallbackTime &&
@@ -3953,14 +3961,31 @@ async function handleStepResponse(ws, session, callerText) {
   ) {
     note(session, "momentary_hold", callerText);
     session.verifyOffTopicCount = 0;
-    const currentStep = getCurrentStep(session);
-    const reask = isQuestionLike(currentStep)
-      ? ` ${renderTemplate(currentStep.text, session.lead)}`
-      : "";
-    sendVoice(ws, `Of course, take your time.${reask}`, session, {
-      isFollowupPrompt: true,
-    });
+    session.awaitingHoldResume = true;
+    sendVoice(
+      ws,
+      "Of course, take your time — just let me know when you're ready.",
+      session,
+      { isFollowupPrompt: true }
+    );
     return;
+  }
+
+  // The lead is back from a momentary hold — re-ask the current step now,
+  // rather than having re-asked immediately when they stepped away.
+  if (session.awaitingHoldResume) {
+    session.awaitingHoldResume = false;
+    const heldStep = getCurrentStep(session);
+    if (isQuestionLike(heldStep)) {
+      sendVoice(
+        ws,
+        `No problem — ${renderTemplate(heldStep.text, session.lead)}`,
+        session,
+        { isFollowupPrompt: true }
+      );
+      return;
+    }
+    // Not a question step — fall through and handle their input normally.
   }
 
   const objectionEnabledSteps = new Set(
@@ -4075,6 +4100,8 @@ async function handleStepResponse(ws, session, callerText) {
       session,
       callerText
     );
+
+    if (session.turnSeq !== entrySeq) return; // superseded by a newer utterance
 
     await handleUnknownMomentByType(ws, session, callerText, classification);
     return;
@@ -4440,6 +4467,8 @@ async function handleStepResponse(ws, session, callerText) {
         } else {
           session.awaitingEmailConfirmation = false;
           session.lead.email = "";
+          session.emailLocalBuffer = "";
+          session.emailAttempts = 0;
           sendVoice(
             ws,
             "No problem. Let me get that again — go ahead and spell it out for me.",
@@ -4449,18 +4478,73 @@ async function handleStepResponse(ws, session, callerText) {
           return;
         }
       } else {
-        const email = extractEmail(text);
+        // Email is spelled across multiple turns. extractEmail only matches a
+        // full local@domain.tld, so before Test 15's fix every partial got
+        // rejected with "I didn't quite catch that" (it took 7 tries). Now we
+        // buffer the raw spoken fragments and stitch them together so the
+        // domain can arrive in a later turn ("...at gmail dot com"). The
+        // spell-back confirmation is the safety net for any stitching errors.
+
+        // Try the whole utterance alone first — handles a full address in one
+        // turn, or the lead restarting with the complete address.
+        let email = extractEmail(text);
+
+        // Otherwise stitch the buffered fragments with this turn and retry.
+        // Stitching the RAW text (not normalized) keeps the spaces around
+        // "at"/"dot" so normalizeSpokenEmail can turn them into @ and "." even
+        // when a turn begins with "at ...".
+        if (!email && session.emailLocalBuffer) {
+          email = extractEmail(`${session.emailLocalBuffer} ${text}`);
+        }
 
         if (!email) {
+          // No full address yet — stash this turn's raw fragment (if it carries
+          // any email-ish characters) and ask them to continue, instead of
+          // dead-ending with "I didn't quite catch that".
+          const localish = normalizeSpokenEmail(text).replace(
+            /[^a-z0-9._%+-]/g,
+            ""
+          );
+          if (localish.length > 0) {
+            session.emailLocalBuffer = session.emailLocalBuffer
+              ? `${session.emailLocalBuffer} ${text.trim()}`
+              : text.trim();
+          }
+
+          session.emailAttempts = (session.emailAttempts || 0) + 1;
+
+          // Don't trap a struggling lead forever — fall back to manual follow-up.
+          if (session.emailAttempts >= 6) {
+            session.emailLocalBuffer = "";
+            session.emailAttempts = 0;
+            note(session, "email_capture_failed", text);
+            setOutcome(session, "manual_followup_needed");
+            session.crm.booking_status = "manual_followup_needed";
+            releaseHeldSlotForSession(session);
+            sendVoice(
+              ws,
+              "No worries, I'll send the confirmation details over by text instead so you have everything. You're all set for the appointment.",
+              session
+            );
+            session.shouldEndCall = true;
+            return;
+          }
+
+          const haveSoFar = (session.emailLocalBuffer || "").length > 0;
           sendVoice(
             ws,
-            "I'm sorry, I didn't quite catch that. Can you spell out your email for me?",
-            session
+            haveSoFar
+              ? "Got the first part — go ahead and finish it, including the @ and the part after, like gmail dot com."
+              : "No problem — go ahead and spell out your email, including the @ and the part after, like gmail dot com.",
+            session,
+            { isFollowupPrompt: true }
           );
           return;
         }
 
         session.lead.email = email;
+        session.emailLocalBuffer = "";
+        session.emailAttempts = 0;
         note(session, "email_collected", session.lead.email);
 
         // Spell back the local part character by character, keep domain readable
@@ -4616,6 +4700,14 @@ wss.on("connection", (ws, req) => {
       logTranscript(session, "lead", callerText);
       console.log("Caller said:", callerText);
 
+      // Turn sequence: if the lead speaks in two quick bursts, a slow async
+      // path (e.g. AI unknown-moment classification) from the EARLIER burst can
+      // resolve after the later burst was already handled and stomp its
+      // response (Test 15: an orphaned "Does that sound right?" then a re-ask
+      // that proceeded without waiting). Each path captures this seq before its
+      // await and bails if a newer utterance has since arrived.
+      const mySeq = ++session.turnSeq;
+
       updateSessionToneFromText(session, callerText);
 
       const interrupted = detectLikelyInterruption(session);
@@ -4629,6 +4721,8 @@ wss.on("connection", (ws, req) => {
       session,
       callerText
       );
+
+    if (session.turnSeq !== mySeq) return; // superseded by a newer utterance
 
     await handleUnknownMomentByType(ws, session, callerText, classification);
     return;
