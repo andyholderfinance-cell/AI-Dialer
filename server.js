@@ -171,6 +171,63 @@ function handleVerifyOffTopic(ws, session, reaskLine) {
   sendVoice(ws, `${ack} ${reaskLine}`, session, { isFollowupPrompt: true });
 }
 
+// A brief, in-the-moment pause ("hold on", "give me a second", "I'll be right
+// back") — NOT a request to reschedule for another day. Without this, the
+// unknown-moment classifier sometimes reads "I'll be right back" as a callback
+// request and derails the call (Test 14: the bot offered booking times mid-
+// verify, then echoed the lead's next sentence into a callback note).
+function detectMomentaryHold(text) {
+  const t = normalizeText(text);
+  if (!t) return false;
+
+  // If they're actually trying to reschedule / can't talk, that's a real
+  // callback — let detectObjection handle it, not this.
+  if (
+    containsAny(t, [
+      "call me back",
+      "call you back",
+      "call me later",
+      "another time",
+      "another day",
+      "tomorrow",
+      "later today",
+      "this afternoon",
+      "this evening",
+      "tonight",
+      "busy",
+      "bad time",
+    ])
+  ) {
+    return false;
+  }
+
+  return containsAny(t, [
+    "hold on",
+    "hang on",
+    "one sec",
+    "one second",
+    "give me a sec",
+    "give me a second",
+    "give me a minute",
+    "gimme a sec",
+    "gimme a second",
+    "be right back",
+    "right back",
+    "brb",
+    "just a sec",
+    "just a second",
+    "just a moment",
+    "wait a sec",
+    "wait a second",
+    "wait a minute",
+    "my dog",
+    "at the door",
+    "someone at the door",
+    "the doorbell",
+    "let me grab",
+  ]);
+}
+
 function isNegative(text) {
   const t = normalizeText(text);
   return containsAny(t, [
@@ -1533,7 +1590,10 @@ function detectCallbackTime(text) {
     return "morning";
   }
 
-  return safeString(text).trim();
+  // No recognizable time phrase. Return empty rather than echoing the raw
+  // transcript back at the lead (Test 14: "I'll make a note for Okay. I'm
+  // back. What were you saying?"). Callers fall back to a generic line.
+  return "";
 }
 
 function detectCallbackReason(text) {
@@ -3575,6 +3635,18 @@ async function handleCallbackCapture(ws, session, callerText) {
     "im available",
     "i'm free",
     "im free",
+    "i'm back",
+    "im back",
+    "i am back",
+    "i'm here",
+    "im here",
+    "okay im back",
+    "what were you saying",
+    "what was that",
+    "where were we",
+    "sorry about that",
+    "you still there",
+    "you there",
   ]);
 
   if (wantsToResume) {
@@ -3594,10 +3666,10 @@ async function handleCallbackCapture(ws, session, callerText) {
   session.callbackRequested = true;
   session.awaitingCallbackTime = false;
 
-  note(session, "callback_time", callbackTime);
+  note(session, "callback_time", callbackTime || "unspecified");
   note(session, "callback_reason", callbackReason);
 
-  session.crm.callback_time = callbackTime;
+  session.crm.callback_time = callbackTime || "unspecified";
   session.crm.callback_reason = callbackReason;
 
   setOutcome(session, "callback_requested");
@@ -3605,11 +3677,13 @@ async function handleCallbackCapture(ws, session, callerText) {
   session.shouldEndCall = true;
   releaseHeldSlotForSession(session);
 
-  sendVoice(
-    ws,
-    `Perfect, I'll make a note for ${callbackTime}. Appreciate it.`,
-    session
-  );
+  // Only repeat a time back if we actually parsed one — never echo the raw
+  // transcript (Test 14).
+  const confirmation = callbackTime
+    ? `Perfect, I'll make a note for ${callbackTime}. Appreciate it.`
+    : "Perfect, I'll make a note to follow up with you. Appreciate it.";
+
+  sendVoice(ws, confirmation, session);
 }
 
 function markObjection(session, matchedObjection, currentStepId) {
@@ -3867,6 +3941,27 @@ async function handleStepResponse(ws, session, callerText) {
     callerText
   );
   if (relativeHandled) return;
+
+  // A momentary pause ("hold on", "give me a second", "I'll be right back") is
+  // not an objection or a callback request. Acknowledge and hold the current
+  // step instead of letting the classifier derail into offering a callback
+  // (Test 14). Skip while spelling data or already collecting a callback time.
+  if (
+    step.id !== "collect_email" &&
+    !session.awaitingCallbackTime &&
+    detectMomentaryHold(callerText)
+  ) {
+    note(session, "momentary_hold", callerText);
+    session.verifyOffTopicCount = 0;
+    const currentStep = getCurrentStep(session);
+    const reask = isQuestionLike(currentStep)
+      ? ` ${renderTemplate(currentStep.text, session.lead)}`
+      : "";
+    sendVoice(ws, `Of course, take your time.${reask}`, session, {
+      isFollowupPrompt: true,
+    });
+    return;
+  }
 
   const objectionEnabledSteps = new Set(
     SCRIPT_STEPS.slice(getStepIndexById("intro_3")).map((s) => s.id)
@@ -4204,8 +4299,14 @@ async function handleStepResponse(ws, session, callerText) {
     }
 
     case "verify_coborrower": {
-      // Don't capture an off-topic question as the co-borrower's name.
-      if (isQuestionToBot(text) && !isConfirmation(text)) {
+      // Don't capture an off-topic question or a stall as the co-borrower's
+      // name (Test 14: "Hold on, I'll be right back" was swallowed as data).
+      // Re-ask instead of advancing. Note: isConfirmation guards a plain "yes"
+      // ("yes, my wife") from being treated as a tangent.
+      if (
+        !isConfirmation(text) &&
+        (isQuestionToBot(text) || detectMomentaryHold(text))
+      ) {
         handleVerifyOffTopic(
           ws,
           session,
